@@ -1,0 +1,38 @@
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: validator-primary
+spec:
+  type: ClusterIP
+  selector:
+    app: validator-primary
+  ports:
+  - protocol: TCP
+    targetPort: 26656
+    port: 26656
+    name: rpc
+  - protocol: TCP
+    targetPort: 26657
+    port: 26657
+    name: rpcw
+  - protocol: TCP
+    targetPort: 8001
+    port: 8001
+    name: sidekick
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: validator-primary-ext
+spec:
+  type: LoadBalancer
+  selector:
+    app: validator-primary
+  sessionAffinity: "ClientIP"
+  ports:
+  - protocol: TCP
+    targetPort: 26656
+    port: 26656
+    name: rpc

@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: instagoric
+
+resources:
+  - ../../bases/shared
+  - ../../bases/primaryvalidator
+#  - ../../bases/validators
+#  - ../../bases/seed
+#  - ../../bases/ag-solo-manual
+#  - ../../bases/ag-solo-tasks
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: node
+    patch: |-
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: CHAIN_ID
+          value: instagoric-1
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: BOOTSTRAP_CONFIG
+          value: "@agoric/vats/decentral-core-config.json"
+  - target:
+      kind: StatefulSet
+      name: validator-primary
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 4Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 2Gi
+# to set honeycomb.io API secret, add this
+# - op: add
+#   path: /spec/template/spec/containers/0/env/-
+#   value: 
+#     name: HONEYCOMB_API_KEY
+#     value: ""
+
+images:
+  - name: agoric/agoric-sdk
+    newTag: "17"
+
+
+configMapGenerator:
+  - name: otel-config
+    files:
+      - otel-config.yaml

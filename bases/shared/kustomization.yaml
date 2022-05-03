@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - serviceaccount.yaml
+configMapGenerator:
+  - name: network-config
+    files:
+      - resources/node_key.json
+      - resources/seed_node_key.json
+      - resources/network_info.json
+  - name: entrypoint
+    files:
+      - entrypoint.sh
+  - name: server
+    files:
+      - server.js

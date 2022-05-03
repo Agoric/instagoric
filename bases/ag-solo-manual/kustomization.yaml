@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../node
+  - service.yaml
+
+commonLabels:
+  app: ag-solo-manual
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: node
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 1000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 2Gi
+      - op: replace
+        path: /spec/replicas
+        value: 2
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: ROLE
+          value: ag-solo
+      - op: replace
+        path: /spec/selector/matchLabels/app
+        value: ag-solo-manual
+      - op: replace
+        path: /metadata/name
+        value: ag-solo-manual
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: SUBROLE
+          value: manual
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: TASKS
+          value: manual
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: SOLO_FUNDING_AMOUNT
+          value: 5000000000urun,5000000000ubld,1provisionpass
+      - op: add
+        path: /spec/serviceName
+        value: ag-solo-manual

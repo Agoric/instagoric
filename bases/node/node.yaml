@@ -1,0 +1,108 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: node
+spec:
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: node
+  serviceName: node
+  replicas: 1
+  updateStrategy:
+    rollingUpdate:
+      partition: 0
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: node
+    spec:
+      terminationGracePeriodSeconds: 10
+      serviceAccountName: opentracing-agent
+      containers:
+        - name: node
+          image: agoric/agoric-sdk
+          command: ["/bin/bash"]
+          securityContext:
+            capabilities:
+              add:
+                - SYS_PTRACE
+
+          args: ["-x", "/entrypoint/entrypoint.sh"]
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: PODNAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: OTEL_EXPORTER_PROMETHEUS_PORT
+              value: "26661"
+          ports:
+            - containerPort: 26656
+              name: rpc
+            - containerPort: 26657
+              name: rpcw
+            - containerPort: 8000
+              name: captp
+            - containerPort: 8001
+              name: captpsecret
+            - containerPort: 9090
+              name: grpc
+            - containerPort: 26652
+              name: prometheus
+            - containerPort: 26660
+              name: swingset
+            - containerPort: 26661
+              name: prom
+            - containerPort: 26658
+              name: api
+          volumeMounts:
+            - name: state
+              mountPath: /state
+            - name: entrypoint
+              mountPath: /entrypoint
+            - name: network-config
+              mountPath: /config/network
+            - name: otel-config
+              mountPath: /config/otel
+            - name: server
+              mountPath: /server
+          resources:
+            limits:
+              cpu: 1000m
+              ephemeral-storage: 5Gi
+              memory: 8Gi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 5Gi
+              memory: 2Gi
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-config
+        - name: entrypoint
+          configMap:
+            name: entrypoint
+        - name: network-config
+          configMap:
+            name: network-config
+        - name: server
+          configMap:
+            name: server
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi
+

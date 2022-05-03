@@ -1,0 +1,68 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: instagoric
+
+resources:
+  - ../node
+  - ./service.yaml
+
+commonLabels:
+  app: validator-primary
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: node
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 2000m
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 13Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 13Gi
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: add
+        path: /spec/serviceName
+        value: validator-primary
+      - op: replace
+        path: /spec/selector/matchLabels/app
+        value: validator-primary
+      - op: add
+        path: /spec/template/metadata/labels/grouplb
+        value: validator
+
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: ROLE
+          value: validator-primary
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: USE_OTEL_CONFIG
+          value: /config/otel/otel-config.yaml
+      - op: replace
+        path: /metadata/name
+        value: validator-primary
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: http://localhost:4318/v1/traces
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: SLOGSENDER
+          value: "@agoric/telemetry/src/otel-trace.js"
+
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 300Gi
