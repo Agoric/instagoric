@@ -1,8 +1,14 @@
 # instagoric
 
+## Local cluster
+
+Optionally specify the Agoric SDK image tag.
+
+1. kustomize edit set image agoric/agoric-sdk:dev
+
 To deploy:
 
-1. kubectl apply -k ./overlays/local
+1. kubectl apply -k .
 
 When finished:
 

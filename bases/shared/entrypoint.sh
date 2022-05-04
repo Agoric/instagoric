@@ -266,7 +266,12 @@ if [[ -z "${USE_OTEL_CONFIG}" ]]; then
   echo "skipping stats since OTEL_CONFIG isn't set"
 else
   echo "starting metrics"
-  /usr/local/bin/otelcol-contrib --config "$USE_OTEL_CONFIG" &
+  OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
+  cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
+  sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
+    -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
+    "$HOME/instagoric-otel-config.yaml"
+  /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
 fi
 
 

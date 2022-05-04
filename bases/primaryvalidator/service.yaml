@@ -9,13 +9,13 @@ spec:
     app: validator-primary
   ports:
   - protocol: TCP
-    targetPort: 26656
-    port: 26656
-    name: rpc
-  - protocol: TCP
     targetPort: 26657
     port: 26657
     name: rpcw
+  - protocol: TCP
+    targetPort: 26656
+    port: 26656
+    name: rpc
   - protocol: TCP
     targetPort: 8001
     port: 8001

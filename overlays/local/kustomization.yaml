@@ -12,6 +12,16 @@ resources:
 
 patches:
   - target:
+      kind: Service
+      name: validator-primary
+    patch: |-
+      - op: replace
+        path: /spec/type
+        value: NodePort
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30657
+  - target:
       kind: StatefulSet
       name: node
     patch: |-
@@ -19,12 +29,18 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value: 
           name: CHAIN_ID
-          value: instagoric-1
+          valueFrom:
+            configMapKeyRef:
+              name: instagoric-release
+              key: CHAIN_ID
       - op: add
         path: /spec/template/spec/containers/0/env/-
         value:
           name: BOOTSTRAP_CONFIG
-          value: "@agoric/vats/decentral-core-config.json"
+          valueFrom:
+            configMapKeyRef:
+              name: instagoric-release
+              key: BOOTSTRAP_CONFIG
   - target:
       kind: StatefulSet
       name: validator-primary
@@ -41,19 +57,21 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/memory
         value: 2Gi
-# to set honeycomb.io API secret, add this
-# - op: add
-#   path: /spec/template/spec/containers/0/env/-
-#   value: 
-#     name: HONEYCOMB_API_KEY
-#     value: ""
-
-images:
-  - name: agoric/agoric-sdk
-    newTag: "17"
-
-
-configMapGenerator:
-  - name: otel-config
-    files:
-      - otel-config.yaml
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HONEYCOMB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: telemetry-secrets
+              key: HONEYCOMB_API_KEY
+              optional: true
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value:
+          name: HONEYCOMB_DATASET
+          valueFrom:
+            configMapKeyRef:
+              name: instagoric-release
+              key: HONEYCOMB_DATASET
+              optional: true
