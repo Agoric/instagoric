@@ -10,6 +10,13 @@ resources:
 #  - ../../bases/ag-solo-manual
 #  - ../../bases/ag-solo-tasks
 
+configMapGenerator:
+  - name: instagoric-release
+    literals:
+    - CHAIN_ID=agoriclocal-1
+    - BOOTSTRAP_CONFIG=@agoric/vats/decentral-core-config.json
+    - HONEYCOMB_DATASET=instagoric-local
+
 patches:
   - target:
       kind: Service
@@ -21,26 +28,6 @@ patches:
       - op: add
         path: /spec/ports/0/nodePort
         value: 30657
-  - target:
-      kind: StatefulSet
-      name: node
-    patch: |-
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value: 
-          name: CHAIN_ID
-          valueFrom:
-            configMapKeyRef:
-              name: instagoric-release
-              key: CHAIN_ID
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: BOOTSTRAP_CONFIG
-          valueFrom:
-            configMapKeyRef:
-              name: instagoric-release
-              key: BOOTSTRAP_CONFIG
   - target:
       kind: StatefulSet
       name: validator-primary
@@ -57,21 +44,3 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/memory
         value: 2Gi
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HONEYCOMB_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: telemetry-secrets
-              key: HONEYCOMB_API_KEY
-              optional: true
-      - op: add
-        path: /spec/template/spec/containers/0/env/-
-        value:
-          name: HONEYCOMB_DATASET
-          valueFrom:
-            configMapKeyRef:
-              name: instagoric-release
-              key: HONEYCOMB_DATASET
-              optional: true

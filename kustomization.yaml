@@ -3,4 +3,4 @@ kind: Kustomization
 namespace: instagoric
 
 resources:
-  - overlays/local-1
+  - overlays/local

@@ -9,7 +9,6 @@ commonLabels:
 configMapGenerator:
   - name: tasks
     files:
-      - tasks/nm.tar.gz
       - tasks/loaded.js
       - tasks/amm_swap.js
 

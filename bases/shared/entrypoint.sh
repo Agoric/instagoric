@@ -6,7 +6,7 @@ export PRIMARY_ENDPOINT="http://validator-primary.$NAMESPACE.svc.cluster.local"
 export RPC_ENDPOINT="http://rpcnodes.$NAMESPACE.svc.cluster.local"
 export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
 export WHALE_KEYNAME="whale"
-export CHAIN_ID=${CHAIN_ID:-instagoric}
+export CHAIN_ID=${CHAIN_ID:-instagoric-1}
 export AGORIC_HOME="/state/$CHAIN_ID"
 boottime="$(date '+%s')"
 export SLOGFILE="/state/slogfile_${boottime}.json"
@@ -14,7 +14,7 @@ export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export WHALE_SECRET="${WHALE_SECRET:-chuckle good seminar twin parrot split minimum humble tumble predict liberty taste match blossom vicious pride slogan supreme attract lucky typical until switch dry}"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-3m}
-export KEY_DERIVATIONS=${KEY_DERIVATIONS:-200}
+export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-20}
 
 mkdir -p /state/cores
 chmod a+rwx /state/cores
@@ -147,12 +147,10 @@ fund_solo () {
 }
 
 run_tasks () {
-    cd || exit
-    mkdir working
-    cd working || exit
+    cd /usr/src/agoric-sdk || exit
+    mkdir ag-solo-tasks
+    cd ag-solo-tasks || exit
     cp /tasks/* .
-    tar -xvf nm.tar.gz
-    cp /usr/src/agoric-sdk/package.json .
     while true; do
         if agoric deploy loaded.js; then
             echo "ag-solo loaded"
@@ -262,10 +260,12 @@ get_ips() {
 }
 
 ###
-if [[ -z "${USE_OTEL_CONFIG}" ]]; then
-  echo "skipping stats since OTEL_CONFIG isn't set"
-else
-  echo "starting metrics"
+if [[ -z "${ENABLE_TELEMETRY}" ]]; then
+  echo "skipping telemetry since ENABLE_TELEMETRY is not set"
+  unset OTEL_EXPORTER_OTLP_ENDPOINT
+  unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
+  echo "starting telemetry collector"
   OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
   cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
   sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
@@ -302,9 +302,9 @@ else
 
 
         if [[ $ROLE == "validator-primary" ]]; then
-            if [[ -n "${GC_INTERVAL}" ]] && [[ -z "$HONEYCOMB_API_KEY" ]]; then      
+            if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then      
                 timestamp=$(date +%s)
-                curl https://api.honeycomb.io/1/markers/instagoric-gcp-loadtest -X POST  \
+                curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST  \
                     -H "X-Honeycomb-Team: $HONEYCOMB_API_KEY"  \
                     -d "{\"message\":\"GC_INTERVAL: ${GC_INTERVAL}\", \"type\":\"deploy\", \"start_time\":${timestamp}}"
             fi
@@ -313,7 +313,7 @@ else
             agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
             
 
-            for ((i=0; i <= $KEY_DERIVATIONS; i++)); do 
+            for ((i=0; i <= $WHALE_DERIVATIONS; i++)); do 
                 add_whale_key $i
                 agd add-genesis-account "${WHALE_KEYNAME}_${i}" 10000000000000000ubld,10000000000000000urun,1000000provisionpass --keyring-backend test --home "$AGORIC_HOME" 
             done
