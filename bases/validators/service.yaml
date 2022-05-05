@@ -1,7 +1,19 @@
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: stage-grpc-backendconfig
+spec:
+  healthCheck:
+    port: 26657
+    requestPath: /
+    type: HTTP
 ---
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    cloud.google.com/app-protocols: '{"grpc":"HTTP2"}'
+    cloud.google.com/backend-config: '{"default": "stage-grpc-backendconfig"}'
   name: rpcnodes
 spec:
   type: ClusterIP
@@ -11,11 +23,11 @@ spec:
   - protocol: TCP
     targetPort: 26656
     port: 26656
-    name: rpc
+    name: p2p
   - protocol: TCP
     targetPort: 26657
     port: 26657
-    name: rpcw
+    name: rpc
   - protocol: TCP
     targetPort: 1317
     port: 1317
@@ -29,6 +41,9 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    cloud.google.com/app-protocols: '{"grpc":"HTTP2"}'
+    cloud.google.com/backend-config: '{"default": "stage-grpc-backendconfig"}'
   name: rpcnodes-ext
 spec:
   type: LoadBalancer
@@ -39,7 +54,7 @@ spec:
   - protocol: TCP
     targetPort: 26657
     port: 26657
-    name: rpcw
+    name: rpc
   - protocol: TCP
     targetPort: 1317
     port: 1317

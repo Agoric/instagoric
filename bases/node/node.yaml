@@ -71,9 +71,9 @@ spec:
               value: "26661"
           ports:
             - containerPort: 26656
-              name: rpc
+              name: p2p
             - containerPort: 26657
-              name: rpcw
+              name: rpc
             - containerPort: 8000
               name: captp
             - containerPort: 8001
@@ -86,7 +86,7 @@ spec:
               name: swingset
             - containerPort: 26661
               name: prom
-            - containerPort: 26658
+            - containerPort: 1317
               name: api
           volumeMounts:
             - name: state

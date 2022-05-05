@@ -15,6 +15,7 @@ spec:
 
 
 ---
+# TODO: Deprecated.
 apiVersion: v1
 kind: Service
 metadata:
@@ -28,4 +29,4 @@ spec:
   - protocol: TCP
     targetPort: 26656
     port: 26656
-    name: rpc
+    name: p2p
