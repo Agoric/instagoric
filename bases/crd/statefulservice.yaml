@@ -1,0 +1,131 @@
+kind: CustomResourceDefinition
+apiVersion: apiextensions.k8s.io/v1
+metadata:
+  name: statefulservices.agoric.com
+spec:
+  group: agoric.com
+  names:
+    plural: statefulservices
+    singular: statefulservice
+    shortNames:
+      - ssvc
+    kind: StatefulService
+    listKind: StatefulServiceList
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          description: StatefulService is the Schema for extracting services from StatefulSets.
+          type: object
+          properties:
+            apiVersion:
+              description: >-
+                APIVersion defines the versioned schema of this representation
+                of an object. Servers should convert recognized schemas to the
+                latest internal value, and may reject unrecognized values. More
+                info:
+                https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+              type: string
+            kind:
+              description: >-
+                Kind is a string value representing the REST resource this
+                object represents. Servers may infer this from the endpoint the
+                client submits requests to. Cannot be updated. In CamelCase.
+                More info:
+                https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+              type: string
+            metadata:
+              type: object
+            spec:
+              description: StatefulService.spec describes the desired state of this resource
+              type: object
+              required:
+                - resource
+              properties:
+                resource:
+                  description: >-
+                    The resource reference for the existing StatefulSet.
+                  type: object
+                  required:
+                    - apiGroup
+                    - kind
+                    - name
+                  properties:
+                    apiGroup:
+                      description: >-
+                        APIGroup is the group for the resource (e.g. "apps").
+                      type: string
+                    kind:
+                      description: >-
+                        Kind is the type of resource being referenced (e.g. "StatefulSet").
+                      type: string
+                    name:
+                      description: >-
+                        Name is the name of the resource being referenced (e.g. "my-stateful-set").
+                      type: string
+                template:
+                  type: object
+                  required:
+                    - spec
+                  properties:
+                    spec:
+                      type: object
+                      description: >-
+                        The desired state for the created Services.
+                      required:
+                        - type
+                        - ports
+                      properties:
+                        type:
+                          description: >-
+                            The type of the service.
+                          type: string
+                        externalTrafficPolicy:
+                          description: >-
+                            The externalTrafficPolicy is set on the service.
+                          type: string
+                        ports:
+                          type: array
+                          description: >-
+                            The ports that the service should be exposed on.
+                          items:
+                            type: object
+                            required:
+                              - name
+                              - port
+                            properties:
+                              name:
+                                description: >-
+                                  The name of the port that will be exposed.
+                                type: string
+                              port:
+                                description: >-
+                                  The port number that will be exposed.
+                                type: integer
+                              targetPort:
+                                description: >-
+                                  The port number at which the service is listening.
+                                type: integer
+                              protocol:
+                                description: >-
+                                  The protocol for the port.
+                                type: string
+                                default: TCP
+            status:
+              description: The status of this Memcached resource, set by the operator.
+              type: object
+              properties:
+                services:
+                  description: The list of services created by the operator.
+                  type: array
+                  items:
+                    description: The name of a service created by the operator.
+                    type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+  conversion:
+    strategy: None
