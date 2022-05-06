@@ -3,6 +3,9 @@ kind: BackendConfig
 metadata:
   name: stage-grpc-backendconfig
 spec:
+  # This overrides the loadbalancer health check for grpc and api ports.
+  # The api port returns an error message which would otherwise fail health.
+  # The grpc port doesn't expect HTTP health checks.
   healthCheck:
     port: 26657
     requestPath: /

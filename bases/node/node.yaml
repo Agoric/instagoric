@@ -55,6 +55,12 @@ spec:
                   name: instagoric-release
                   key: CHAIN_ID
                   optional: true
+            - name: VOTING_PERIOD
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: VOTING_PERIOD
+                  optional: true
             - name: HONEYCOMB_DATASET
               valueFrom:
                 configMapKeyRef:

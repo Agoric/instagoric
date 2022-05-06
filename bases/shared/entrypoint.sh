@@ -13,7 +13,7 @@ export SLOGFILE="/state/slogfile_${boottime}.json"
 export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export WHALE_SECRET="${WHALE_SECRET:-chuckle good seminar twin parrot split minimum humble tumble predict liberty taste match blossom vicious pride slogan supreme attract lucky typical until switch dry}"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
-export VOTING_PERIOD=${VOTING_PERIOD:-3m}
+export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-20}
 
 mkdir -p /state/cores
@@ -300,6 +300,11 @@ else
         agd init --home "$AGORIC_HOME" --chain-id "$CHAIN_ID" "$PODNAME"
         agoric set-defaults ag-chain-cosmos $AGORIC_HOME/config
 
+        # Preserve the node key for this state.
+        if [[ ! -f /state/node_key.json ]]; then
+          cp "$AGORIC_HOME/config/node_key.json" /state/node_key.json
+        fi
+        cp /state/node_key.json "$AGORIC_HOME/config/node_key.json"
 
         if [[ $ROLE == "validator-primary" ]]; then
             if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then      
