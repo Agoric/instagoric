@@ -11,7 +11,6 @@ export AGORIC_HOME="/state/$CHAIN_ID"
 boottime="$(date '+%s')"
 export SLOGFILE="/state/slogfile_${boottime}.json"
 export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
-export WHALE_SECRET="${WHALE_SECRET:-chuckle good seminar twin parrot split minimum humble tumble predict liberty taste match blossom vicious pride slogan supreme attract lucky typical until switch dry}"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-20}
@@ -55,7 +54,8 @@ wait_for_bootstrap () {
 
 add_whale_key () {
     keynum=${1:-0}
-    echo $WHALE_SECRET | agd keys add "${WHALE_KEYNAME}_${keynum}" --index $keynum --recover --home "$AGORIC_HOME"  --keyring-backend test
+    [[ -n "$WHALE_SEED" ]] || return 1
+    echo "$WHALE_SEED" | agd keys add "${WHALE_KEYNAME}_${keynum}" --index $keynum --recover --home "$AGORIC_HOME"  --keyring-backend test
 }
 
 create_self_key () {
@@ -318,12 +318,16 @@ else
             agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
             
 
-            for ((i=0; i <= $WHALE_DERIVATIONS; i++)); do 
-                add_whale_key $i
-                agd add-genesis-account "${WHALE_KEYNAME}_${i}" 10000000000000000ubld,10000000000000000urun,1000000provisionpass --keyring-backend test --home "$AGORIC_HOME" 
-            done
-            #faucet
-            agd add-genesis-account agoric1hr29lkgsdzdr0jdpa0tfzjgrm0vnd339qde52l 10000000000000000ubld,10000000000000000urun,1000000provisionpass,100000000000000000000000000ibc/0123456789abcdef,2000000000000ibc/123456789abcdef0,4000000000000ibc/23456789abcdef01,8000000000000ibc/3456789abcdef012 --keyring-backend test --home "$AGORIC_HOME" 
+            if [[ -n $WHALE_SEED ]]; then
+              for ((i=0; i <= $WHALE_DERIVATIONS; i++)); do 
+                  add_whale_key $i &&
+                  agd add-genesis-account "${WHALE_KEYNAME}_${i}" 10000000000000000ubld,10000000000000000urun,1000000provisionpass --keyring-backend test --home "$AGORIC_HOME" 
+              done
+            fi
+            if [[ -n $FAUCET_ADDRESS ]]; then
+              #faucet
+              agd add-genesis-account "$FAUCET_ADDRESS" 10000000000000000ubld,10000000000000000urun,1000000provisionpass,100000000000000000000000000ibc/0123456789abcdef,2000000000000ibc/123456789abcdef0,4000000000000ibc/23456789abcdef01,8000000000000ibc/3456789abcdef012 --keyring-backend test --home "$AGORIC_HOME" 
+            fi
             
             agd gentx self 50000000ubld \
                 --chain-id=$CHAIN_ID \

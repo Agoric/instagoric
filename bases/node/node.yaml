@@ -67,6 +67,18 @@ spec:
                   name: instagoric-release
                   key: HONEYCOMB_DATASET
                   optional: true
+            - name: WHALE_SEED
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: WHALE_SEED
+                  optional: true
+            - name: FAUCET_ADDRESS
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: FAUCET_ADDRESS
+                  optional: true
             - name: HONEYCOMB_API_KEY
               valueFrom:
                 secretKeyRef:
