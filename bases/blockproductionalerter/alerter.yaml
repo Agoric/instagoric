@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blockproductionalerter
+spec:
+  selector:
+    matchLabels:
+      app: blockproductionalerter
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: blockproductionalerter
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: blockproductionalerter
+          image: agoric/agoric-sdk
+          command: ["/bin/bash"]
+          args: ["/entrypoint/entrypoint.sh"]
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 5Gi
+              memory: 200Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 5Gi
+              memory: 200Mi
+          env:
+            - name: API_URLS
+              valueFrom:
+                configMapKeyRef:
+                  name: blockproductionalerter-config
+                  key: API_URLS
+            - name: STATUS_URLS
+              valueFrom:
+                configMapKeyRef:
+                  name: blockproductionalerter-config
+                  key: STATUS_URLS
+          volumeMounts:
+            - name: entrypoint
+              mountPath: /entrypoint
+      volumes:
+        - name: entrypoint
+          configMap:
+            name: blockproductionentrypoint
