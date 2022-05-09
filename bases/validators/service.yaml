@@ -6,7 +6,7 @@ spec:
   healthCheck:
     port: 8080
     requestPath: /
-    type: HTTP2
+    type: HTTP
 ---
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
@@ -32,10 +32,6 @@ spec:
     grouplb: validator
   ports:
   - protocol: TCP
-    targetPort: 26656
-    port: 26656
-    name: p2p
-  - protocol: TCP
     targetPort: 26657
     port: 26657
     name: rpc
@@ -49,6 +45,7 @@ spec:
     name: grpc
 
 ---
+# TODO(mfig): Is this obsolete?
 apiVersion: v1
 kind: Service
 metadata:
