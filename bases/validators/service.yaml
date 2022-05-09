@@ -3,21 +3,29 @@ kind: BackendConfig
 metadata:
   name: stage-grpc-backendconfig
 spec:
-  # This overrides the loadbalancer health check for grpc and api ports.
-  # The api port returns an error message which would otherwise fail health.
-  # The grpc port doesn't expect HTTP health checks.
   healthCheck:
-    port: 26657
+    port: 8080
     requestPath: /
+    type: HTTP2
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: stage-api-backendconfig
+spec:
+  healthCheck:
+    port: 1317
+    requestPath: /node_info
     type: HTTP
 ---
 apiVersion: v1
 kind: Service
 metadata:
+  name: rpcnodes
   annotations:
     cloud.google.com/app-protocols: '{"grpc":"HTTP2"}'
-    cloud.google.com/backend-config: '{"default": "stage-grpc-backendconfig"}'
-  name: rpcnodes
+    cloud.google.com/backend-config: '{"ports":{"grpc":"stage-grpc-backendconfig","api":"stage-api-backendconfig"}}'
+    cloud.google.com/neg: '{"ingress":true,"exposed_ports":{"26657":{},"1317":{},"9090":{}}}'
 spec:
   type: ClusterIP
   selector:
@@ -46,13 +54,13 @@ kind: Service
 metadata:
   annotations:
     cloud.google.com/app-protocols: '{"grpc":"HTTP2"}'
-    cloud.google.com/backend-config: '{"default": "stage-grpc-backendconfig"}'
+    cloud.google.com/backend-config: '{"grpc": "stage-grpc-backendconfig"}'
   name: rpcnodes-ext
 spec:
   type: LoadBalancer
   selector:
     grouplb: validator
-  sessionAffinity: "ClientIP"
+  # sessionAffinity: "ClientIP"
   ports:
   - protocol: TCP
     targetPort: 26657
@@ -66,4 +74,3 @@ spec:
     targetPort: 9090
     port: 9090
     name: grpc
-    
