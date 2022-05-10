@@ -85,6 +85,12 @@ spec:
                   name: telemetry-secrets
                   key: HONEYCOMB_API_KEY
                   optional: true
+            - name: ENABLE_TELEMETRY
+              valueFrom:
+                secretKeyRef:
+                  name: telemetry-secrets
+                  key: ENABLE_TELEMETRY
+                  optional: true
             - name: OTEL_EXPORTER_PROMETHEUS_PORT
               value: "26661"
           ports:
