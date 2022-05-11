@@ -87,7 +87,10 @@ const deployContract = async (homePromise, { bundleSource, pathResolve }) => {
     const gotAmt2 = await E(issuers.BLD).getAmountOf(got2);
     console.log({ gotAmt2 });
 
-
+    try {
+      await E(bldPurse).deposit(got2);
+    } catch {}
+    
     if (removeLiquidity) {
         console.log("remove liquidity");
         const returnLiqInvitation = await E(ammAPI).makeRemoveLiquidityInvitation();
