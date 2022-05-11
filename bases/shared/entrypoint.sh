@@ -13,7 +13,7 @@ export SLOGFILE="/state/slogfile_${boottime}.json"
 export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
-export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-20}
+export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 
 mkdir -p /state/cores
 chmod a+rwx /state/cores

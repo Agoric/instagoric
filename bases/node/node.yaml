@@ -10,8 +10,6 @@ spec:
   serviceName: node
   replicas: 1
   updateStrategy:
-    rollingUpdate:
-      partition: 0
     type: RollingUpdate
   template:
     metadata:
