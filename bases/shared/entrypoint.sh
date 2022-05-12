@@ -139,7 +139,7 @@ fund_solo () {
     echo "funding solo"
     address="$(solo_addr)"
     create_self_solo_key
-    amount=${1:-"50000000urun"}
+    amount=${1:-"500000000000000urun"}
     send_coin "$(get_whale_keyname)" "$amount" "$address"
     while true; do
         if agd tx swingset provision-one "${PODNAME}-ag-solo" "$address" -y --home "$AGORIC_HOME" --keyring-backend test --from self --node "${PRIMARY_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID"; then
@@ -415,7 +415,7 @@ case "$ROLE" in
             add_whale_key "$(get_whale_index)"
             
             wait_for_bootstrap
-            (fund_solo "${SOLO_FUNDING_AMOUNT:-"500000000000urun,500000000000ubld,1provisionpass"}") &
+            (fund_solo "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
             agoric open --repl | tee "/state/agoric.repl"
             cp /config/network/network_info.json /state/network_info.json
             contents="$(jq ".chainName = \"$CHAIN_ID\"" /state/network_info.json)" && echo -E "${contents}" > /state/network_info.json
