@@ -9,6 +9,7 @@ resources:
   - ../../bases/seed
   - ../../bases/ag-solo-manual
   - ../../bases/ag-solo-tasks
+  - ../../bases/explorer
 
 patches:
   - target:
