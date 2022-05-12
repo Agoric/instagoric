@@ -15,4 +15,4 @@ configMapGenerator:
       - entrypoint.sh
   - name: server
     files:
-      - server.js
+      - server.cjs

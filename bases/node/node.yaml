@@ -89,6 +89,17 @@ spec:
                   name: telemetry-secrets
                   key: ENABLE_TELEMETRY
                   optional: true
+            - name: NETNAME
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: NETNAME
+            - name: NETDOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: NETDOMAIN
+                  optional: true
             - name: OTEL_EXPORTER_PROMETHEUS_PORT
               value: "26661"
           ports:
@@ -99,7 +110,9 @@ spec:
             - containerPort: 8000
               name: captp
             - containerPort: 8001
-              name: captpsecret
+              name: sidekick
+            - containerPort: 8002
+              name: sidekickprivate
             - containerPort: 9090
               name: grpc
             - containerPort: 26652
@@ -120,7 +133,7 @@ spec:
             - name: otel-config
               mountPath: /config/otel
             - name: server
-              mountPath: /server
+              mountPath: /usr/src/agoric-sdk/packages/instagoric-server
           resources:
             limits:
               cpu: 1000m

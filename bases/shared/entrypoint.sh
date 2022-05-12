@@ -2,6 +2,7 @@
 set -x
 set +e
 
+#use of primary is required for bootstrapping, as rpcnodes may be serving nodes of various registration states during early bootup
 export PRIMARY_ENDPOINT="http://validator-primary.$NAMESPACE.svc.cluster.local"
 export RPC_ENDPOINT="http://rpcnodes.$NAMESPACE.svc.cluster.local"
 export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
@@ -23,10 +24,13 @@ echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 primary_node_peer () {
     echo "fb86a0993c694c981a28fa1ebd1fd692f345348b"
 }
+seed_node_peer () {
+    echo "0f04c4610b7511a64b8644944b907416db568590"
+}
 
 primary_genesis () {
     while true; do
-        if json=$(curl -m 15 -sS "$PRIMARY_ENDPOINT:8001/genesis.json"); then 
+        if json=$(curl --fail -m 15 -sS "$PRIMARY_ENDPOINT:8002/genesis.json"); then 
             echo "$json"
             break
         fi
@@ -34,9 +38,9 @@ primary_genesis () {
     done
 }
 wait_for_bootstrap () {
-    endpoint="${RPC_ENDPOINT}"
+    endpoint="${PRIMARY_ENDPOINT}"
     while true; do
-        if json=$(curl -m 15 -sS "$endpoint:26657/status"); then 
+        if json=$(curl --fail -m 15 -sS "$endpoint:26657/status"); then 
             if [[ "$(echo "$json" | jq -r .jsonrpc)" == "2.0" ]]; then 
                 if last_height=$(echo "$json" | jq -r .result.sync_info.latest_block_height); then
                     if [[ "$last_height" != "1" ]]; then
@@ -87,7 +91,7 @@ tell_primary_about_validator () {
     echo "Node Up"
 
     node_id=$(agd tendermint show-node-id --home "$AGORIC_HOME")
-    dial_result=$(curl -m 15 -sS -g "$PRIMARY_ENDPOINT:26657/dial_peers?peers=[\"$node_id@$POD_IP:26656\"]&persistent=true&private=false")
+    dial_result=$(curl --fail -m 15 -sS -g "$PRIMARY_ENDPOINT:26657/dial_peers?peers=[\"$node_id@$POD_IP:26656\"]&persistent=true&private=false")
     echo "Dialed Primary: $dial_result"
 
 }
@@ -138,7 +142,7 @@ fund_solo () {
     amount=${1:-"50000000urun"}
     send_coin "$(get_whale_keyname)" "$amount" "$address"
     while true; do
-        if agd tx swingset provision-one "${PODNAME}-ag-solo" "$address" -y --home "$AGORIC_HOME" --keyring-backend test --from self --node "${RPC_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID"; then
+        if agd tx swingset provision-one "${PODNAME}-ag-solo" "$address" -y --home "$AGORIC_HOME" --keyring-backend test --from self --node "${PRIMARY_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID"; then
             touch "$AG_SOLO_BASEDIR/funded"
             return
         fi
@@ -182,7 +186,7 @@ wait_till_syncup_and_register () {
   --moniker="$PODNAME" \
   --website="http://$POD_IP:26657" \
   --details="" \
-  --node="http://localhost:26657" \
+  --node="$PRIMARY_ENDPOINT:26657" \
   --commission-rate="0.10" \
   --commission-max-rate="0.20" \
   --commission-max-change-rate="0.01" \
@@ -210,7 +214,7 @@ send_coin () {
     to=${3:-$(cat /state/self.address)}
     
     while true; do
-        pre=$(agd query bank balances $to --node http://rpcnodes.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
+        pre=$(agd query bank balances $to --node http://validator-primary.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
         while true; do
             if agd tx bank send -b block "$from" "$to" "${amount}" --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME"  --chain-id="$CHAIN_ID"; then
                 echo "successfully sent $amount to $to"
@@ -218,7 +222,7 @@ send_coin () {
             fi
         done
         sleep 10
-        post=$(agd query bank balances $to --node http://rpcnodes.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
+        post=$(agd query bank balances $to --node http://validator-primary.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
         if [[ "$pre" != "$post" ]]; then
             echo "coin sent"
             break
@@ -229,7 +233,7 @@ send_coin () {
 }
 start_helper () {
     while true; do
-        node "/server/server.js"
+        node "/usr/src/agoric-sdk/packages/instagoric-server/server.cjs"
         sleep 1
     done
 }
@@ -246,7 +250,7 @@ hang () {
 get_ips() {
     servicename=$1
     while true; do
-        if json=$(curl -m 15 -sS "localhost:8001/ips"); then 
+        if json=$(curl --fail -m 15 -sS "localhost:8002/ips"); then 
             if [[ "$(echo "$json" | jq -r .status)" == "1" ]]; then 
                 if ip=$(echo "$json" | jq -r ".ips.\"$servicename\""); then
                     echo "$ip"
@@ -390,10 +394,13 @@ case "$ROLE" in
             #wait_for_bootstrap
             # get primary peer id
             primary=$(primary_node_peer)
+            seed=$(seed_node_peer)
             PEERS="$primary@validator-primary.$NAMESPACE.svc.cluster.local:26656"
+            SEEDS="$seed@seed.$NAMESPACE.svc.cluster.local:26656"
+
             sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
             sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$primary\"/" "$AGORIC_HOME/config/config.toml"
-            sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"3s\"/" "$AGORIC_HOME/config/config.toml"
+            sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
         fi
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &

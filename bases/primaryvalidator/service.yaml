@@ -17,9 +17,9 @@ spec:
     port: 26656
     name: p2p
   - protocol: TCP
-    targetPort: 8001
-    port: 8001
-    name: sidekick
+    targetPort: 8002
+    port: 8002
+    name: sidekickprivate
 
 ---
 apiVersion: v1
