@@ -143,28 +143,28 @@ spec:
               cpu: 100m
               ephemeral-storage: 5Gi
               memory: 2Gi
-        - name: grpc-hc
-          image: docker.io/salrashid123/grpc_health_proxy:1.0.0
-          args: 
-            - '--grpcaddr=localhost:9090'
-            - '--http-listen-addr=0.0.0.0:8080'
-            - '--logtostderr=1'
-          ports:
-            - containerPort: 8080
-              name: grpc-hc
-          # FIXME: Help, please, Ari!
-          # Warning: Autopilot increased resource requests for StatefulSet
-          # instagoric/validator to meet requirements.  See
-          # http://g.co/gke/autopilot-resources.
-          resources:
-            limits:
-              cpu: 500m
-              ephemeral-storage: 1Gi
-              memory: 3Gi
-            requests:
-              cpu: 250m
-              ephemeral-storage: 1Gi
-              memory: 1Gi
+        # - name: grpc-hc
+        #   image: docker.io/salrashid123/grpc_health_proxy:1.0.0
+        #   args: 
+        #     - '--grpcaddr=localhost:9090'
+        #     - '--http-listen-addr=0.0.0.0:8080'
+        #     - '--logtostderr=1'
+        #   ports:
+        #     - containerPort: 8080
+        #       name: grpc-hc
+        #   # FIXME: Help, please, Ari!
+        #   # Warning: Autopilot increased resource requests for StatefulSet
+        #   # instagoric/validator to meet requirements.  See
+        #   # http://g.co/gke/autopilot-resources.
+        #   resources:
+        #     limits:
+        #       cpu: 500m
+        #       ephemeral-storage: 1Gi
+        #       memory: 3Gi
+        #     requests:
+        #       cpu: 250m
+        #       ephemeral-storage: 1Gi
+        #       memory: 1Gi
       volumes:
         - name: otel-config
           configMap:
