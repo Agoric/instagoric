@@ -10,12 +10,12 @@ if [ -z "$chainid" ]; then
 fi
 
 case $1 in
-logs)
+console)
   shift
   cmd="cat"
   while [ $# -gt 0 ]; do
     case $1 in
-    -f | --follow) cmd="tail -f -n 100" ;;
+    -f | --follow) cmd="tail -f" ;;
     -r | --reverse) cmd="tac" ;;
     *)
       if [ -z "$target" ]; then
