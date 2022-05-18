@@ -10,6 +10,7 @@ configMapGenerator:
       - resources/node_key.json
       - resources/seed_node_key.json
       - resources/network_info.json
+      - resources/economy-proposals.json
   - name: entrypoint
     files:
       - entrypoint.sh

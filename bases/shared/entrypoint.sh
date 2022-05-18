@@ -96,11 +96,12 @@ tell_primary_about_validator () {
 
 }
 
-get_whale_index () {
-    podnum=$(echo $PODNAME | grep -o '[0-9]*$')
+get_whale_index () { 
+    name=${1:-$PODNAME}
+    podnum=$(echo "$name" | grep -o '[0-9]*$')
     validator_padding=20
     ag_solo_manual_padding=10
-    case $PODNAME in
+    case $name in
         validator-primary-*)
             echo 0
             return
@@ -282,19 +283,36 @@ fi
 echo "ROLE: $ROLE"
 echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
+
+whaleamount="10000000000000000ubld,10000000000000000urun,1000000provisionpass"
+whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie"
+
 if [[ $ROLE == "ag-solo" ]]; then
     if [[ ! -f "$AG_SOLO_BASEDIR/ag-solo-mnemonic" ]] || [[ ! -f "$AG_SOLO_BASEDIR/funded" ]]; then
         #ag-solo firstboot
         firstboot="true"
     fi
 else
-    #agd firstboot
     if [[ -n "${GC_INTERVAL}" ]]; then      
-        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-demo-config.json > /usr/src/agoric-sdk/packages/vats/decentral-demo-config-modified.json
-        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-demo-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-demo-config-modified.json
-        export BOOTSTRAP_CONFIG="@agoric/vats/decentral-demo-config-modified.json"
+        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
+#        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+        export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
     fi
 
+    if [[ -n "${ECON_SOLO_SEED}" ]]; then
+        econ_addr=$(echo "$ECON_SOLO_SEED" | agd keys add econ --dry-run --recover --output json | jq -r .address)
+#        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+        sed "s/@FIRST_SOLO_ADDRESS@/$econ_addr/g" /config/network/economy-proposals.json > /tmp/formatted_proposals.json
+        source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config.json"
+        if [[ -f /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json ]]; then
+            source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json"
+        fi
+
+        contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
+        export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
+    fi
+
+    #agd firstboot
     if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
         # ari's terrible docker fix, please eventually remove
         apt-get install -y nano tmux netcat
@@ -320,17 +338,23 @@ else
 
             create_self_key
             agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
-            
 
+
+            # get the whale offset for econ funding ag-solo-manual-0
+            ag_solo_manual_idx=$(get_whale_index ag-solo-manual-0)
             if [[ -n $WHALE_SEED ]]; then
               for ((i=0; i <= $WHALE_DERIVATIONS; i++)); do 
+                  thisamount=$whaleamount
+                  if (( i == ag_solo_manual_idx )); then
+                      thisamount=$whaleibcdenoms
+                  fi
                   add_whale_key $i &&
-                  agd add-genesis-account "${WHALE_KEYNAME}_${i}" 10000000000000000ubld,10000000000000000urun,1000000provisionpass --keyring-backend test --home "$AGORIC_HOME" 
+                  agd add-genesis-account "${WHALE_KEYNAME}_${i}" $thisamount --keyring-backend test --home "$AGORIC_HOME" 
               done
             fi
             if [[ -n $FAUCET_ADDRESS ]]; then
               #faucet
-              agd add-genesis-account "$FAUCET_ADDRESS" 10000000000000000ubld,10000000000000000urun,1000000provisionpass,100000000000000000000000000ibc/0123456789abcdef,2000000000000ibc/123456789abcdef0,4000000000000ibc/23456789abcdef01,8000000000000ibc/3456789abcdef012 --keyring-backend test --home "$AGORIC_HOME" 
+              agd add-genesis-account "$FAUCET_ADDRESS" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME" 
             fi
             
             agd gentx self 50000000ubld \
@@ -371,7 +395,9 @@ else
         sed -i.bak '/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26657"/}' "$AGORIC_HOME/config/config.toml"
     fi
 fi
-(start_helper &)
+
+
+(WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
 echo "Firstboot: $firstboot"
 case "$ROLE" in
     "validator-primary")
@@ -411,14 +437,27 @@ case "$ROLE" in
         start_chain
         ;;
     "ag-solo")
+        if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
+            export SOLO_MNEMONIC=$ECON_SOLO_SEED
+        fi
+
         if [[ $firstboot == "true" ]]; then
             add_whale_key "$(get_whale_index)"
             
             wait_for_bootstrap
+            if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
+                export SOLO_FUNDING_AMOUNT=$whaleibcdenoms
+            fi
             (fund_solo "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
             agoric open --repl | tee "/state/agoric.repl"
+            cp $HOME/.agoric/swingset-kernel-state.jsonlines $AGORIC_HOME/swingset-kernel-state.jsonlines
             cp /config/network/network_info.json /state/network_info.json
             contents="$(jq ".chainName = \"$CHAIN_ID\"" /state/network_info.json)" && echo -E "${contents}" > /state/network_info.json
+        fi
+
+        if [[ -f $AGORIC_HOME/swingset-kernel-state.jsonlines ]]; then 
+            mkdir -p $HOME/.agoric
+            cp $AGORIC_HOME/swingset-kernel-state.jsonlines $HOME/.agoric/
         fi
 
         wait_for_bootstrap

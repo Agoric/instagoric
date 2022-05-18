@@ -2,6 +2,9 @@ var fs = require('fs');
 var path = require('path');
 
 const https = require('https');
+const spawn = require('child_process').spawn;
+
+let dockerImage;
 
 const namespace = (process.env.NAMESPACE !== undefined) ? process.env.NAMESPACE : fs.readFileSync("/var/run/secrets/kubernetes.io/serviceaccount/namespace", {encoding:'utf8', flag:'r'});
 
@@ -54,6 +57,7 @@ async function getNodeId(node){
   let parsed = JSON.parse(data);
   return "asdf";
 }
+
 
 async function getServices(){
   if (process.env.FAKE !== undefined) {
@@ -151,6 +155,8 @@ privateapp.use(logReq);
 faucetapp.use(logReq);
 
 publicapp.get('/', (req, res) => {
+  const domain=(process.env.NETDOMAIN || ".agoric.net");
+  const netname=(process.env.NETNAME || "devnet");
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -160,32 +166,60 @@ publicapp.get('/', (req, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ` + (process.env.CHAIN_ID || "unknown") + `
-Network Config: <a href="https://` + (process.env.NETNAME || "devnet" ) + (process.env.NETDOMAIN || ".agoric.net" ) + `/network-config">https://` + (process.env.NETNAME || "devnet" ) + (process.env.NETDOMAIN || ".agoric.net" ) + `/network-config</a>
-RPC: <a href="https://` + (process.env.NETNAME || "devnet" ) + `.rpc` +  (process.env.NETDOMAIN || ".agoric.net") + `">https://` + (process.env.NETNAME || "devnet" ) + `.rpc` +  (process.env.NETDOMAIN || ".agoric.net") + `</a>
-gRPC: <a href="https://` + (process.env.NETNAME || "devnet" ) + `.grpc` +  (process.env.NETDOMAIN || ".agoric.net") + `">https://` + (process.env.NETNAME || "devnet" ) + `.grpc` +  (process.env.NETDOMAIN || ".agoric.net") + `</a>
-API: <a href="https://` + (process.env.NETNAME || "devnet" ) + `.api` +  (process.env.NETDOMAIN || ".agoric.net") + `">https://` + (process.env.NETNAME || "devnet" ) + `.api` +  (process.env.NETDOMAIN || ".agoric.net") + `</a>
-Explorer: <a href="https://` + (process.env.NETNAME || "devnet" ) + `.explorer` +  (process.env.NETDOMAIN || ".agoric.net") + `">https://` + (process.env.NETNAME || "devnet" ) + `.explorer` +  (process.env.NETDOMAIN || ".agoric.net") + `</a>
-Faucet: <a href="https://` + (process.env.NETNAME || "devnet" ) + `.faucet` +  (process.env.NETDOMAIN || ".agoric.net") + `">https://` + (process.env.NETNAME || "devnet" ) + `.faucet` +  (process.env.NETDOMAIN || ".agoric.net") + `</a>
+Chain: ${process.env.CHAIN_ID || "unknown"}
+Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
+Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
+RPC: <a href="https://${netname}.rpc${domain}">https://${netname}.rpc${domain}</a>
+gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain}</a>
+API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
+Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
+Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 
+----
+See more at <a href="https://agoric.com">https://agoric.com</a>
 </pre></body></html>                                                     
   `)
-})
+});
 
 publicapp.get('/network-config', (req, res) => {
+  res.setHeader('Content-type', 'text/plain;charset=UTF-8');
   networkConfig.getData()
     .then((result) => {
       res.send(result);
     });
-})
+});
 
-publicapp.listen(publicport, () => {
-  console.log(`publicapp listening on port ${publicport}`)
-})
+const docker_compose_yml = (dockertag, netname, netdomain=".agoric.net") => `version: "2.2"
+services:
+  ag-solo:
+    image: agoric/agoric-sdk:\${SDK_TAG:-${dockertag}}
+    ports:
+      - "\${HOST_PORT:-8000}:\${PORT:-8000}"
+    volumes:
+      - "ag-solo-state:/state"
+      - "\$HOME/.agoric:/root/.agoric"
+    environment:
+      - "AG_SOLO_BASEDIR=/state/\${SOLO_HOME:-${dockertag}}"
+    entrypoint: ag-solo
+    command:
+      - setup
+      - --webhost=0.0.0.0
+      - --webport=\${PORT:-8000}
+      - --netconfig=\${NETCONFIG_URL:-https://${netname}${netdomain}/network-config}
+volumes:
+  ag-solo-state:
+`;
+
+publicapp.get('/docker-compose.yml', (req, res) => {
+  res.setHeader('Content-disposition', 'attachment; filename=docker-compose.yml');
+  res.setHeader('Content-type', 'text/x-yaml;charset=UTF-8');
+  res.send(docker_compose_yml(process.env.DOCKERTAG || dockerImage.split(":")[1], process.env.NETNAME || "devnet", process.env.NETDOMAIN || ".agoric.net"));
+});
+
 
 privateapp.get('/', (req, res) => {
   res.send('welcome to instagoric');
-})
+});
 
 privateapp.get('/ips', (req, res) => {
   ipsCache.getData()
@@ -197,7 +231,7 @@ privateapp.get('/ips', (req, res) => {
       ipsCache.resetCache();
     }
   });
-})
+});
 
 privateapp.get('/genesis.json', (req, res) => {
   try {
@@ -211,7 +245,7 @@ privateapp.get('/genesis.json', (req, res) => {
     console.error(err);
   }
   res.status(500).send("error");
-})
+});
 
 privateapp.get('/repl', (req, res) => {
   ipsCache.getData()
@@ -228,14 +262,168 @@ privateapp.get('/repl', (req, res) => {
  });
 });
 
+const addressToRequest = new Map();
+let requestQueueAdded;
+let requestQueueIsNonempty = new Promise(resolve => requestQueueAdded = resolve);
+const requestQueue = [];
+const faucetRequests = {
+  [Symbol.asyncIterator]: () => ({
+    next: async () => {
+      await requestQueueIsNonempty;
+      const request = requestQueue.shift();
+      if (!requestQueue.length) {
+        requestQueueIsNonempty = new Promise(resolve => requestQueueAdded = resolve);
+      }
+      return {done: false, value: request}
+    }
+  }),
+};
+const addRequest = (address, request) => {
+  if (addressToRequest.has(address)) {
+    request[0].status(429).send("error - already queued");
+    return;
+  }
+  console.log("enqueued", address);
+  addressToRequest.set(address, 1);
+  requestQueue.push([address, request]);
+  requestQueueAdded();
+};
+
+async function agd(args) {
+  try {
+    console.log("Running agd ", ...args);
+    const { stdout, stderr } = await spawnAsync("agd", args, {});
+    console.log('stdout:', stdout);
+    console.log('stderr:', stderr);
+    return true;
+  } catch (e) {
+    console.error(e); // should contain code (exit code) and signal (that caused the termination).
+    return false;
+  }
+}
+
+const spawnAsync = async (
+  command,
+  args,
+  options
+) =>
+  new Promise((resolve, reject) => {
+    const spawnProcess = spawn(command, args, options);
+    const chunks = [];
+    const errorChunks = [];
+    spawnProcess.stdout.on("data", (data) => {
+      process.stdout.write(data.toString());
+      chunks.push(data);
+    });
+    spawnProcess.stderr.on("data", (data) => {
+      process.stderr.write(data.toString());
+      errorChunks.push(data);
+    });
+    spawnProcess.on("error", (error) => {
+      reject(error);
+    });
+    spawnProcess.on("close", (code) => {
+      if (code === 1) {
+        reject(Buffer.concat(errorChunks).toString());
+        return;
+      }
+      resolve(Buffer.concat(chunks));
+    });
+  });
+
+// Faucet worker.
+const startFaucetWorker = () => {
+  console.log('Starting Faucet worker!');
+  (async () => {
+  for await (const [address, request] of faucetRequests) {
+    // Handle request.
+    console.log("dequeued", address);
+
+    const command = request[1];
+    let status = false;
+    switch (command){
+      case "client": {
+        status = await agd(["tx", "bank", "send", "-b", "block", process.env.WHALE_KEYNAME || "self", address, process.env.CLIENT_AMOUNT || "25000000urun",  "-y", "--keyring-backend", "test", "--home", process.env.AGORIC_HOME, "--chain-id", process.env.CHAIN_ID]);
+        if (status){
+          status = await agd(["tx", "swingset", "provision-one", "faucet_provision", address, "-b", "block", "--from", process.env.WHALE_KEYNAME, "-y", "--keyring-backend", "test", "--home", process.env.AGORIC_HOME, "--chain-id", process.env.CHAIN_ID]);
+        }
+        break;
+      }
+      case "delegate": {
+        status = await agd(["tx", "bank", "send", "-b", "block", process.env.WHALE_KEYNAME || "self", address, process.env.DELEGATE_AMOUNT || "75000000ubld",  "-y", "--keyring-backend", "test", "--home", process.env.AGORIC_HOME, "--chain-id", process.env.CHAIN_ID]);
+        break;
+      }
+      default: {
+        console.log("unknown command");
+        request[0].status(500).send("failure");
+        continue;
+      }
+    }
+
+    addressToRequest.delete(address);
+    if (status){
+      console.log("Success");
+      request[0].status(200).send("success");
+    } else {
+      console.log("Failure");
+      request[0].status(500).send("failure");
+    }
+  }
+})().catch(e => {
+  console.error('Faucet worker died', e);
+  new Promise(resolve => setTimeout(resolve, 3000)).then(startFaucetWorker);
+});
+};
+startFaucetWorker();
+
 privateapp.listen(privateport, () => {
-  console.log(`publicapp listening on port ${privateport}`)
-})
+  console.log(`privateapp listening on port ${privateport}`)
+});
 
 faucetapp.get('/', (req, res) => {
-  res.send('welcome to faucet');
-})
+    res.send(`
+    <html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
+    <form action="/go" method="post">
+    <label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
+    Request: <input type="radio" id="delegate" name="command" value="delegate">
+    <label for="delegate">delegate</label> 
+    <input type="radio" id="client" name="command" value="client">
+    <label for="client">client</label><br>
+
+    <input type="submit" />
+    </form></body></html>
+    `);
+  }
+);
+
+faucetapp.use(express.urlencoded({
+  extended: true
+}))
+
+
+faucetapp.post('/go', (req, res) => {
+  const {command, address} = req.body;
+
+  if ((command === "client" || command === "delegate") && (typeof address === "string" && address.length === 45 && /^agoric1[0-9a-zA-Z]{38}$/.test(address))){
+    addRequest(address, [res, command]);
+  } else {
+    res.status(403).send('invalid form');
+  }
+});
+
 
 faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`)
-})
+});
+
+(async () => {
+  if (process.env.FAKE !== undefined) {
+    dockerImage = "asdf:unknown";
+  } else {
+    const statefulSet = await makeSynchronousRequest(`https://kubernetes.default.svc/apis/apps/v1/namespaces/${namespace}/statefulsets/validator-primary`);
+    dockerImage = JSON.parse(statefulSet).spec.template.spec.containers[0].image;
+  }
+  publicapp.listen(publicport, () => {
+    console.log(`publicapp listening on port ${publicport}`)
+  })  
+})();
