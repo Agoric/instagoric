@@ -183,6 +183,7 @@ See more at <a href="https://agoric.com">https://agoric.com</a>
 
 publicapp.get('/network-config', (req, res) => {
   res.setHeader('Content-type', 'text/plain;charset=UTF-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   networkConfig.getData()
     .then((result) => {
       res.send(result);
