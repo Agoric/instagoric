@@ -69,7 +69,7 @@ create_self_key () {
     echo "$key_address" > /state/self.address
 }
 
-create_self_solo_key () {
+ensure_self_solo_key () {
     address_file="/state/self.key"
     if [ -f "$address_file" ]; then
         return
@@ -136,18 +136,18 @@ solo_addr () {
     done
 }
 
-fund_solo () {
-    echo "funding solo"
+ensure_solo_provisioned () {
     address="$(solo_addr)"
-    create_self_solo_key
+    echo "provisioning solo $address"
+    ensure_self_solo_key
     amount=${1:-"500000000000000urun"}
-    send_coin "$(get_whale_keyname)" "$amount" "$address"
-    while true; do
-        if agd tx swingset provision-one "${PODNAME}-ag-solo" "$address" -y --home "$AGORIC_HOME" --keyring-backend test --from self --node "${PRIMARY_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID"; then
-            touch "$AG_SOLO_BASEDIR/funded"
-            return
-        fi
-        sleep $(( ( RANDOM % 4 )  + 1 ))
+    whale_key=$(get_whale_keyname)
+    ensure_balance "$whale_key" "$amount" "$address"
+    while ! agd query swingset egress "$address" --node="$PRIMARY_ENDPOINT:26657"; do
+        agd tx swingset provision-one "$PODNAME" "$address" \
+          -y --home "$AGORIC_HOME" --keyring-backend test --from self \
+          --node "${PRIMARY_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID" -b block
+        sleep $(( ( RANDOM % 4 )  + 10 ))
     done
 }
 
@@ -178,7 +178,7 @@ wait_till_syncup_and_register () {
                 if [[ $parsed == "false" ]]; then
                     echo "caught up, register validator"
                     stakeamount="50000000ubld"
-                    send_coin "$(get_whale_keyname)" "$stakeamount"
+                    ensure_balance "$(get_whale_keyname)" "$stakeamount"
                     sleep 10
                     agd tx staking create-validator \
   --home="$AGORIC_HOME" \
@@ -209,27 +209,36 @@ wait_till_syncup_and_register () {
     done
 }
 
-send_coin () {
+ensure_balance () {
     from=$1
     amount=$2
     to=${3:-$(cat /state/self.address)}
     
+    want=${amount//,/ }
     while true; do
-        pre=$(agd query bank balances $to --node http://validator-primary.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
-        while true; do
-            if agd tx bank send -b block "$from" "$to" "${amount}" --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME"  --chain-id="$CHAIN_ID"; then
-                echo "successfully sent $amount to $to"
-                break
-            fi
+        have=$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:26657" -ojson | jq -r '.balances')
+        needed=
+        sep=
+        for valueDenom in $want; do
+          read -r wantValue denom <<<"$(echo "$valueDenom" | sed -e 's/\([^0-9].*\)/ \1/')"
+          haveValue=$(echo "$have" | jq -r ".[] | select(.denom == \"$denom\") | .amount")
+          echo "$denom: have $haveValue, want $wantValue"
+          if (( wantValue > haveValue )); then
+            needed="$needed$sep$(( wantValue - haveValue ))$denom"
+            sep=,
+          fi
         done
-        sleep 10
-        post=$(agd query bank balances $to --node http://validator-primary.$NAMESPACE.svc.cluster.local:26657 | md5sum | awk '{ print $1 }' )
-        if [[ "$pre" != "$post" ]]; then
-            echo "coin sent"
+        if [ -z "$needed" ]; then
+            echo "$to now has at least $amount"
             break
         fi
-        echo "error sending coin, retrying"
-        sleep $(( ( RANDOM % 50 )  + 1 ))
+        if agd tx bank send -b block "$from" "$to" "$needed" \
+          --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test \
+          --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"; then
+            echo "successfully sent $amount to $to"
+        else
+            sleep $(( ( RANDOM % 50 ) + 10 ))
+        fi
     done
 }
 start_helper () {
@@ -288,7 +297,7 @@ whaleamount="10000000000000000ubld,10000000000000000urun,1000000provisionpass"
 whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie"
 
 if [[ $ROLE == "ag-solo" ]]; then
-    if [[ ! -f "$AG_SOLO_BASEDIR/ag-solo-mnemonic" ]] || [[ ! -f "$AG_SOLO_BASEDIR/funded" ]]; then
+    if [[ ! -f "$AG_SOLO_BASEDIR/ag-solo-mnemonic" ]]; then
         #ag-solo firstboot
         firstboot="true"
     fi
@@ -441,31 +450,30 @@ case "$ROLE" in
             export SOLO_MNEMONIC=$ECON_SOLO_SEED
         fi
 
+        rm -rf "$HOME/.agoric"
+        mkdir -p "/state/dot-agoric"
+        ln -s "/state/dot-agoric" "$HOME/.agoric"
+
         if [[ $firstboot == "true" ]]; then
             add_whale_key "$(get_whale_index)"
-            
-            wait_for_bootstrap
-            if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
-                export SOLO_FUNDING_AMOUNT=$whaleibcdenoms
-            fi
-            (fund_solo "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
+         
             agoric open --repl | tee "/state/agoric.repl"
-            cp $HOME/.agoric/swingset-kernel-state.jsonlines $AGORIC_HOME/swingset-kernel-state.jsonlines
             cp /config/network/network_info.json /state/network_info.json
             contents="$(jq ".chainName = \"$CHAIN_ID\"" /state/network_info.json)" && echo -E "${contents}" > /state/network_info.json
         fi
 
-        if [[ -f $AGORIC_HOME/swingset-kernel-state.jsonlines ]]; then 
-            mkdir -p $HOME/.agoric
-            cp $AGORIC_HOME/swingset-kernel-state.jsonlines $HOME/.agoric/
-        fi
-
         wait_for_bootstrap
+
+        if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
+            export SOLO_FUNDING_AMOUNT="$whaleibcdenoms,1provisionpass"
+        fi
+        (ensure_solo_provisioned "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
+
         if [[ $SUBROLE == "tasks" ]]; then
             ( sleep 60 && run_tasks ) &
         fi
 
-        ag-solo setup --netconfig=file:///state/network_info.json --webhost=0.0.0.0 2>&1 | tee -a /state/app.log
+        ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 2>&1 | tee -a /state/app.log
         ;;
     "seed")
         if [[ $firstboot == "true" ]]; then

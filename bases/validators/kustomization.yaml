@@ -63,7 +63,11 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value:
           name: SLOGSENDER
-          value: "@agoric/telemetry/src/otel-trace.js"
+          valueFrom:
+            configMapKeyRef:
+              name: otel-config
+              key: SLOGSENDER
+              optional: true
       - op: replace
         path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
         value: 300Gi

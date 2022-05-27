@@ -4,13 +4,26 @@ v=validator-primary-0
 from=${from-self}
 keyopts=" --keyring-backend=test"
 
+case $1 in
+repl)
+  kubectl exec ag-solo-manual-0 -- cat /state/agoric.repl
+  exit $?
+  ;;
+console)
+  shift
+  grep '"type":"console"' ${1+"$@"} | \
+    jq -rc '[(.time | todate), .source, (.args | join(" "))] | join(": ")'
+  exit $?
+  ;;
+esac
+
 if [ -z "$chainid" ]; then
   echo 1>&2 "Usage: chainid=agoricstage-27 $0 [--all] arguments"
   exit 1
 fi
 
 case $1 in
-console)
+logs)
   shift
   cmd="cat"
   while [ $# -gt 0 ]; do
@@ -29,13 +42,7 @@ console)
     shift
   done
   target=${target-validator-primary-0}
-  kubectl exec "$target" -- bash -c "$(cat <<EOF
-$cmd \$(ls /state/slogfile_*.json | tail -1) | \
-  grep '"type":"console"' | \
-  jq -rc '[(.time | todate), .source, (.args | join(" "))] | join(": ")'
-EOF
-)"
-  exit $?
+  kubectl exec "$target" -- bash -c "$cmd \$(ls /state/slogfile_*.json | tail -1)"
   ;;
 esac
 
