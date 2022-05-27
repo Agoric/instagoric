@@ -244,10 +244,18 @@ ensure_balance () {
     done
 }
 start_helper () {
-    while true; do
-        node "/usr/src/agoric-sdk/packages/instagoric-server/server.cjs"
+    (
+      SRV=/usr/src/instagoric-server
+      rm -rf "$SRV"
+      mkdir -p "$SRV" || exit
+      cp /config/server/* "$SRV" || exit
+      cd "$SRV" || exit
+      yarn --production
+      while true; do
+        yarn start
         sleep 1
-    done
+      done
+    )
 }
 
 start_chain () {

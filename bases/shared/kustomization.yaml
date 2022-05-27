@@ -16,4 +16,6 @@ configMapGenerator:
       - entrypoint.sh
   - name: server
     files:
-      - server.cjs
+      - server.js
+      - package.json
+      - yarn.lock

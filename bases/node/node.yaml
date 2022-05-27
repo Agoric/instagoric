@@ -145,7 +145,7 @@ spec:
             - name: otel-config
               mountPath: /config/otel
             - name: server
-              mountPath: /usr/src/agoric-sdk/packages/instagoric-server
+              mountPath: /config/server
           resources:
             limits:
               cpu: 1000m
