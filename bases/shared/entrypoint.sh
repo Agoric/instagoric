@@ -223,9 +223,11 @@ ensure_balance () {
           read -r wantValue denom <<<"$(echo "$valueDenom" | sed -e 's/\([^0-9].*\)/ \1/')"
           haveValue=$(echo "$have" | jq -r ".[] | select(.denom == \"$denom\") | .amount")
           echo "$denom: have $haveValue, want $wantValue"
-          if (( wantValue > haveValue )); then
-            needed="$needed$sep$(( wantValue - haveValue ))$denom"
-            sep=,
+          if [[ -z "$haveValue" ]]; then
+            needed="$needed$sep$wantValue$denom"
+          #elif (( wantValue > haveValue )); then
+          #  needed="$needed$sep$(( wantValue - haveValue ))$denom"
+          #  sep=,
           fi
         done
         if [ -z "$needed" ]; then
