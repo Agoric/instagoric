@@ -16,6 +16,7 @@ configMapGenerator:
       - entrypoint.sh
   - name: server
     files:
-      - server.js
-      - package.json
-      - yarn.lock
+      - instagoric-server/lockdown.js
+      - instagoric-server/server.js
+      - instagoric-server/package.json
+      - instagoric-server/yarn.lock

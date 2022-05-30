@@ -6,7 +6,6 @@
   "scripts": {
     "build": "exit 0",
     "test": "exit 0",
-    "fake": "NAMESPACE=instagoric FAKE=true node server.js",
     "start": "NAMESPACE=instagoric node server.js",
     "test:c8": "c8 $C8_OPTIONS ava --config=ava-nesm.config.js",
     "test:xs": "exit 0",
@@ -38,6 +37,7 @@
     "@endo/promise-kit": "^0.2.41",
     "express": "^4.17.1",
     "prettier": "^2.6.2",
+    "tmp": "^0.2.1",
     "zx": "^6.1.0"
   },
   "prettier": {

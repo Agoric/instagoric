@@ -1,18 +1,50 @@
 // @ts-check
-import '@endo/init';
+import './lockdown.js';
 
 import process from 'process';
 import express from 'express';
+import https from 'https';
+import tmp from 'tmp';
 import { $, fetch, fs, sleep } from 'zx';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
+const { details: X } = globalThis.assert;
+
+const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || '25000000urun';
+const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld';
+const DOCKERTAG = process.env.DOCKERTAG; // Optional.
+const FAUCET_KEYNAME = process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
+const NETNAME = process.env.NETNAME || 'devnet';
+const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
+
+const FAKE = process.env.FAKE || process.argv[2] === '--fake';
+if (FAKE) {
+  console.log('FAKE MODE');
+  const tmpDir = await new Promise((resolve, reject) => {
+    tmp.dir({ prefix: 'faucet', postfix: 'home' }, (err, path) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(path);
+    });
+  });
+  // Create the temporary key.
+  console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
+  await $`agd --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
+  process.env.AGORIC_HOME = tmpDir;
+}
+
+const agoricHome = process.env.AGORIC_HOME;
+assert(agoricHome, X`AGORIC_HOME not set`);
+
+const chainId = process.env.CHAIN_ID;
+assert(chainId, X`CHAIN_ID not set`);
+
 let dockerImage;
 
 const namespace =
-  process.env.NAMESPACE !== undefined
-    ? process.env.NAMESPACE
-    : fs.readFileSync(
+  process.env.NAMESPACE || fs.readFileSync(
         '/var/run/secrets/kubernetes.io/serviceaccount/namespace',
         { encoding: 'utf8', flag: 'r' },
       );
@@ -22,6 +54,10 @@ const namespace =
  * @returns {Promise<any>}
  */
 const makeKubernetesRequest = async relativeUrl => {
+  const ca = await fs.readFile(
+    '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
+    'utf8',
+  );
   const token = await fs.readFile(
     '/var/run/secrets/kubernetes.io/serviceaccount/token',
     'utf8',
@@ -35,6 +71,7 @@ const makeKubernetesRequest = async relativeUrl => {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
     },
+    agent: new https.Agent({ ca }),
   });
   return response.json();
 };
@@ -48,7 +85,7 @@ async function getNodeId(node) {
 }
 
 async function getServices() {
-  if (process.env.FAKE !== undefined) {
+  if (FAKE) {
     return new Map([
       ['validator-primary-ext', '1.1.1.1'],
       ['seed-ext', '1.1.1.2'],
@@ -69,24 +106,20 @@ async function getServices() {
 
 const getNetworkConfig = async () => {
   const svc = await getServices();
-  const file = process.env.FAKE
+  const file = FAKE
     ? './resources/network_info.json'
     : '/config/network/network_info.json';
   const buf = await fs.readFile(file, 'utf8');
   const ap = JSON.parse(buf);
-  ap.chainName = process.env.CHAIN_ID;
-  ap.gci = `https://${process.env.NETNAME || 'devnet'}.rpc${
-    process.env.NETDOMAIN || '.agoric.net'
-  }:443/genesis`;
+  ap.chainName = chainId;
+  ap.gci = `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`;
   ap.peers[0] = ap.peers[0].replace(
     'validator-primary.instagoric.svc.cluster.local',
     svc.get('validator-primary-ext') ||
       'validator-primary.instagoric.svc.cluster.local',
   );
   ap.rpcAddrs = [
-    `https://${process.env.NETNAME || 'devnet'}.rpc${
-      process.env.NETDOMAIN || '.agoric.net'
-    }:443`,
+    `https://${NETNAME}.rpc${NETDOMAIN}:443`,
   ];
   ap.seeds[0] = ap.seeds[0].replace(
     'seed.instagoric.svc.cluster.local',
@@ -162,8 +195,8 @@ privateapp.use(logReq);
 faucetapp.use(logReq);
 
 publicapp.get('/', (req, res) => {
-  const domain = process.env.NETDOMAIN || '.agoric.net';
-  const netname = process.env.NETNAME || 'devnet';
+  const domain = NETDOMAIN;
+  const netname = NETNAME;
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -173,7 +206,7 @@ publicapp.get('/', (req, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${process.env.CHAIN_ID || 'unknown'}
+Chain: ${chainId}
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
 RPC: <a href="https://${netname}.rpc${domain}">https://${netname}.rpc${domain}</a>
@@ -195,7 +228,7 @@ publicapp.get('/network-config', async (req, res) => {
   res.send(result);
 });
 
-const dockerComposeYaml = (dockertag, netname, netdomain = '.agoric.net') => `\
+const dockerComposeYaml = (dockertag, netname, netdomain) => `\
 version: "2.2"
 services:
   ag-solo:
@@ -225,9 +258,9 @@ publicapp.get('/docker-compose.yml', (req, res) => {
   res.setHeader('Content-type', 'text/x-yaml;charset=UTF-8');
   res.send(
     dockerComposeYaml(
-      process.env.DOCKERTAG || dockerImage.split(':')[1],
-      process.env.NETNAME || 'devnet',
-      process.env.NETDOMAIN || '.agoric.net',
+      DOCKERTAG || dockerImage.split(':')[1],
+      NETNAME,
+      NETDOMAIN,
     ),
   );
 });
@@ -249,7 +282,7 @@ privateapp.get('/ips', (req, res) => {
 
 privateapp.get('/genesis.json', async (req, res) => {
   try {
-    const file = `/state/${process.env.CHAIN_ID}/config/genesis_final.json`;
+    const file = `/state/${chainId}/config/genesis_final.json`;
     if (await fs.pathExists(file)) {
       const buf = await fs.readFile(file, 'utf8');
       res.send(buf);
@@ -305,17 +338,17 @@ const startFaucetWorker = async () => {
         case 'client': {
           exitCode = await $`\
 agd tx bank send -b block \
-  ${process.env.WHALE_KEYNAME || 'self'} ${address} \
-  ${process.env.CLIENT_AMOUNT || '25000000urun'} \
-  -y --keyring-backend test --home=${process.env.AGORIC_HOME} \
-  --chain-id=${process.env.CHAIN_ID}\
+  ${FAUCET_KEYNAME} ${address} \
+  ${CLIENT_AMOUNT} \
+  -y --keyring-backend test --keyring-dir=${agoricHome} \
+  --chain-id=${chainId}\
 `.exitCode;
           if (exitCode === 0) {
             exitCode = await $`\
 agd tx swingset provision-one faucet_provision ${address} \
-  -b block --from ${process.env.WHALE_KEYNAME} \
-  -y --keyring-backend test --home=${process.env.AGORIC_HOME} \
-  --chain-id=${process.env.CHAIN_ID}\
+  -b block --from ${FAUCET_KEYNAME} \
+  -y --keyring-backend test --keyring-dir=${agoricHome} \
+  --chain-id=${chainId}\
 `.exitCode;
           }
           break;
@@ -323,10 +356,10 @@ agd tx swingset provision-one faucet_provision ${address} \
         case 'delegate': {
           exitCode = await $`\
 agd tx bank send -b block \
-  ${process.env.WHALE_KEYNAME || 'self'} ${address} \
-  ${process.env.DELEGATE_AMOUNT || '75000000ubld'} \
-  -y --keyring-backend test --home=${process.env.AGORIC_HOME} \
-  --chain-id=${process.env.CHAIN_ID}\
+  ${FAUCET_KEYNAME} ${address} \
+  ${DELEGATE_AMOUNT} \
+  -y --keyring-backend test --keyring-dir=${agoricHome} \
+  --chain-id=${chainId}\
 `.exitCode;
           break;
         }
@@ -399,7 +432,7 @@ faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`);
 });
 
-if (process.env.FAKE !== undefined) {
+if (FAKE) {
   dockerImage = 'asdf:unknown';
 } else {
   const statefulSet = await makeKubernetesRequest(
