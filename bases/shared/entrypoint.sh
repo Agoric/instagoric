@@ -70,8 +70,12 @@ create_self_key () {
 }
 
 ensure_self_solo_key () {
-    address_file="/state/self.key"
-    if [ -f "$address_file" ]; then
+    key_file=/state/self.key
+    if [ -f "$key_file" ]; then
+        if [ ! -f "$AGORIC_HOME/keyring-test/self.info" ]; then
+            # Need to recover the key for this chain_id.
+            cat /state/self.key | agd keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
+        fi
         return
     fi
     cat $AG_SOLO_BASEDIR/ag-solo-mnemonic | agd keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
@@ -225,6 +229,7 @@ ensure_balance () {
           echo "$denom: have $haveValue, want $wantValue"
           if [[ -z "$haveValue" ]]; then
             needed="$needed$sep$wantValue$denom"
+            sep=,
           #elif (( wantValue > haveValue )); then
           #  needed="$needed$sep$(( wantValue - haveValue ))$denom"
           #  sep=,
@@ -475,7 +480,7 @@ case "$ROLE" in
         wait_for_bootstrap
 
         if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
-            export SOLO_FUNDING_AMOUNT="$whaleibcdenoms,1provisionpass"
+            export SOLO_FUNDING_AMOUNT=$whaleibcdenoms
         fi
         (ensure_solo_provisioned "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
 
