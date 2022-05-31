@@ -1,4 +1,5 @@
 // @ts-check
+// import '@endo/init/legacy.js';
 import './lockdown.js';
 
 import process from 'process';

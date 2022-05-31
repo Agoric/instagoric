@@ -59,14 +59,16 @@ fi
 
 case $1 in
   keys)
-    opts="$opts$keyopts"
+    shift
+    opts="keys $opts$keyopts"
     ;;
   tx)
-    opts="$opts$keyopts --from=$from --chain-id=$chainid \
-    --gas=auto --gas-adjustment=1.2 -b block --yes"
+    shift
+    opts="tx $opts$keyopts --from=$from --chain-id=$chainid \
+    --gas=auto --gas-adjustment=1.2 -b block --yes=true"
     ;;
 esac
 
 for v in $targets; do
-  kubectl -n instagoric exec "$v" -- agd --home=/state/$chainid ${1+"$@"} $opts
+  kubectl -n instagoric exec "$v" -- agd --home=/state/$chainid $opts ${1+"$@"}
 done
