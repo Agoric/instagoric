@@ -398,6 +398,12 @@ else
             
             contents="$(jq ".app_state.swingset.params.bootstrap_vat_config = \"$BOOTSTRAP_CONFIG\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
             contents="$(jq ".app_state.gov.voting_params.voting_period = \"$VOTING_PERIOD\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+
+            if [[ -n "${BLOCK_COMPUTE_LIMIT}" ]]; then
+                # TODO: Select blockComputeLimit by name instead of index
+                contents="$(jq ".app_state.swingset.params.beans_per_unit[0].beans = \"$BLOCK_COMPUTE_LIMIT\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+            fi
+
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json 
 
         else

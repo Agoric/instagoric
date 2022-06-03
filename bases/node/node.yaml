@@ -65,6 +65,12 @@ spec:
                   name: instagoric-release
                   key: HONEYCOMB_DATASET
                   optional: true
+            - name: BLOCK_COMPUTE_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: BLOCK_COMPUTE_LIMIT
+                  optional: true
             - name: WHALE_SEED
               valueFrom:
                 secretKeyRef:
