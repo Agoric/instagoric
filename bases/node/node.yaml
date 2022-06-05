@@ -59,6 +59,12 @@ spec:
                   name: instagoric-release
                   key: VOTING_PERIOD
                   optional: true
+            - name: ENABLE_XSNAP_DEBUG
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: ENABLE_XSNAP_DEBUG
+                  optional: true
             - name: HONEYCOMB_DATASET
               valueFrom:
                 configMapKeyRef:

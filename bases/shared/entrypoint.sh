@@ -436,7 +436,9 @@ case "$ROLE" in
         
         # external_address=$(get_ips validator-primary-ext)
         # sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
-        export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+        if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
+            export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+        fi
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
         ;;
@@ -460,7 +462,9 @@ case "$ROLE" in
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &
         fi
-        export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+        if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
+            export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+        fi
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
 
         start_chain
