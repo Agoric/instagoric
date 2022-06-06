@@ -425,6 +425,20 @@ else
     fi
 fi
 
+patch_validator_config () {
+    if [[ -n "${CONSENSUS_TIMEOUT_PROPOSE}" ]]; then
+        sed -i.bak "s/^timeout_propose =.*/timeout_propose = \"$CONSENSUS_TIMEOUT_PROPOSE\"/" "$AGORIC_HOME/config/config.toml"
+    fi
+    if [[ -n "${CONSENSUS_TIMEOUT_PREVOTE}" ]]; then
+        sed -i.bak "s/^timeout_prevote =.*/timeout_prevote = \"$CONSENSUS_TIMEOUT_PREVOTE\"/" "$AGORIC_HOME/config/config.toml"
+    fi    
+    if [[ -n "${CONSENSUS_TIMEOUT_PRECOMMIT}" ]]; then
+        sed -i.bak "s/^timeout_precommit =.*/timeout_precommit = \"$CONSENSUS_TIMEOUT_PRECOMMIT\"/" "$AGORIC_HOME/config/config.toml"
+    fi
+    if [[ -n "${CONSENSUS_TIMEOUT_COMMIT}" ]]; then
+        sed -i.bak "s/^timeout_commit =.*/timeout_commit = \"$CONSENSUS_TIMEOUT_COMMIT\"/" "$AGORIC_HOME/config/config.toml"
+    fi
+}
 
 (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
 echo "Firstboot: $firstboot"
@@ -439,6 +453,9 @@ case "$ROLE" in
         if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
             export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
         fi
+
+        patch_validator_config
+
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
         ;;
@@ -466,6 +483,8 @@ case "$ROLE" in
             export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
         fi
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+
+        patch_validator_config
 
         start_chain
         ;;
