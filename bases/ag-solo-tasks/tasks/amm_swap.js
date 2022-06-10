@@ -1,5 +1,6 @@
 /* global process */
 import { E } from '@endo/eventual-send';
+import { AmountMath } from '@agoric/ertp';
 
 const deployContract = async (homePromise, { bundleSource, pathResolve }) => {
     console.log('awaiting home promise...');
@@ -48,7 +49,7 @@ const deployContract = async (homePromise, { bundleSource, pathResolve }) => {
                 Secondary: amt6(brands.BLD, 300n),
                 Central: amt6(brands.RUN, 1500n),
                 },
-                want: { Liquidity: amt6(liquidityBrand, 1000n) },
+                want: { Liquidity: AmountMath.make(liquidityBrand, 1000n) },
             });
             const [sec, cen] = await Promise.all([E(bldPurse).withdraw(fundPoolProposal.give.Secondary), E(runPurse).withdraw(fundPoolProposal.give.Central)]);
             const payments = {
