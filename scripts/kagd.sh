@@ -2,7 +2,7 @@
 v=validator-primary-0
 
 from=${from-self}
-keyopts=" --keyring-backend=test"
+chainid=${chainid}
 
 case $1 in
 repl)
@@ -15,14 +15,6 @@ console)
     jq -rc '[(.time | todate), .source, (.args | join(" "))] | join(": ")'
   exit $?
   ;;
-esac
-
-if [ -z "$chainid" ]; then
-  echo 1>&2 "Usage: chainid=agoricstage-27 $0 [--all] arguments"
-  exit 1
-fi
-
-case $1 in
 logs)
   shift
   cmd="cat"
@@ -46,6 +38,10 @@ logs)
   ;;
 esac
 
+if [ -z "$chainid" ]; then
+  echo 1>&2 "Usage: chainid=agoricstage-27 $0 [--all] arguments"
+  exit 1
+fi
 
 if [[ "$1" == "--all" ]]; then
   shift
@@ -60,15 +56,15 @@ fi
 case $1 in
   keys)
     shift
-    opts="keys $opts$keyopts"
+    set -- keys --keyring-backend=test ${1+"$@"}
     ;;
   tx)
     shift
-    opts="tx $opts$keyopts --from=$from --chain-id=$chainid \
-    --gas=auto --gas-adjustment=1.2 -b block --yes=true"
+    set -- tx --keyring-backend=test --from="$from" --chain-id="$chainid" \
+      --gas=auto --gas-adjustment=1.2 -b block --yes=true ${1+"$@"}
     ;;
 esac
 
 for v in $targets; do
-  kubectl -n instagoric exec "$v" -- agd --home=/state/$chainid $opts ${1+"$@"}
+  kubectl -n instagoric exec "$v" -- agd --home="/state/$chainid" ${1+"$@"}
 done
