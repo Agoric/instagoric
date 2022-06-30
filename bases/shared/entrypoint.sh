@@ -410,6 +410,11 @@ else
             primary_genesis > $AGORIC_HOME/config/genesis.json
         fi
         sed -i.bak 's/^log_level/# log_level/' "$AGORIC_HOME/config/config.toml"
+
+        if [[ -n "${PRUNING}" ]]; then
+            sed -i.bak "s/^pruning =.*/pruning = \"$PRUNING\"/" "$AGORIC_HOME/config/app.toml"
+        fi
+
         sed -i.bak 's/^prometheus = false/prometheus = true/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak 's/^addr_book_strict = true/addr_book_strict = false/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak 's/^max_num_inbound_peers =.*/max_num_inbound_peers = 150/' "$AGORIC_HOME/config/config.toml"
