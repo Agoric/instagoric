@@ -15,9 +15,12 @@ const { details: X } = globalThis.assert;
 const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || '25000000urun';
 const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
-const FAUCET_KEYNAME = process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
+const FAUCET_KEYNAME =
+  process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
 const NETNAME = process.env.NETNAME || 'devnet';
 const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
+const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
+const agBinary = AG0_MODE ? 'ag0' : 'agd';
 
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
@@ -32,7 +35,7 @@ if (FAKE) {
   });
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
-  await $`agd --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
+  await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
   process.env.AGORIC_HOME = tmpDir;
 }
 
@@ -45,10 +48,11 @@ assert(chainId, X`CHAIN_ID not set`);
 let dockerImage;
 
 const namespace =
-  process.env.NAMESPACE || fs.readFileSync(
-        '/var/run/secrets/kubernetes.io/serviceaccount/namespace',
-        { encoding: 'utf8', flag: 'r' },
-      );
+  process.env.NAMESPACE ||
+  fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', {
+    encoding: 'utf8',
+    flag: 'r',
+  });
 
 /**
  * @param {string} relativeUrl
@@ -119,9 +123,7 @@ const getNetworkConfig = async () => {
     svc.get('validator-primary-ext') ||
       'validator-primary.instagoric.svc.cluster.local',
   );
-  ap.rpcAddrs = [
-    `https://${NETNAME}.rpc${NETDOMAIN}:443`,
-  ];
+  ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
   ap.seeds[0] = ap.seeds[0].replace(
     'seed.instagoric.svc.cluster.local',
     svc.get('seed-ext') || 'seed.instagoric.svc.cluster.local',
@@ -337,30 +339,32 @@ const startFaucetWorker = async () => {
       let exitCode = 1;
       switch (command) {
         case 'client': {
-          exitCode = await $`\
-agd tx bank send -b block \
+          if (!AG0_MODE) {
+            exitCode = await $`\
+          ${agBinary} tx bank send -b block \
   ${FAUCET_KEYNAME} ${address} \
   ${CLIENT_AMOUNT} \
   -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId}\
+  --chain-id=${chainId}  --node http://localhost:26657 \
 `.exitCode;
-          if (exitCode === 0) {
-            exitCode = await $`\
-agd tx swingset provision-one faucet_provision ${address} \
+            if (exitCode === 0) {
+              exitCode = await $`\
+            ${agBinary} tx swingset provision-one faucet_provision ${address} \
   -b block --from ${FAUCET_KEYNAME} \
   -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId}\
+  --chain-id=${chainId} --node http://localhost:26657 \
 `.exitCode;
+            }
           }
           break;
         }
         case 'delegate': {
           exitCode = await $`\
-agd tx bank send -b block \
+          ${agBinary} tx bank send -b block \
   ${FAUCET_KEYNAME} ${address} \
   ${DELEGATE_AMOUNT} \
   -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId}\
+  --chain-id=${chainId} --node http://localhost:26657 \
 `.exitCode;
           break;
         }
@@ -394,18 +398,21 @@ privateapp.listen(privateport, () => {
 });
 
 faucetapp.get('/', (req, res) => {
-  res.send(`\
-<html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
+  const clientText = !AG0_MODE
+    ? `<input type="radio" id="client" name="command" value="client">
+<label for="client">client</label><br>`
+    : '';
+  res.send(
+    `<html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
 <form action="/go" method="post">
 <label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
 Request: <input type="radio" id="delegate" name="command" value="delegate">
 <label for="delegate">delegate</label> 
-<input type="radio" id="client" name="command" value="client">
-<label for="client">client</label><br>
-
+${clientText}
 <input type="submit" />
 </form></body></html>
-`);
+`,
+  );
 });
 
 faucetapp.use(

@@ -20,7 +20,13 @@ mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
-
+ag_binary () {
+    if [[ -z "$AG0_MODE" ]]; then 
+        echo "agd";
+    else
+        echo "ag0";
+    fi
+}
 primary_node_peer () {
     echo "fb86a0993c694c981a28fa1ebd1fd692f345348b"
 }
@@ -59,33 +65,33 @@ wait_for_bootstrap () {
 add_whale_key () {
     keynum=${1:-0}
     [[ -n "$WHALE_SEED" ]] || return 1
-    echo "$WHALE_SEED" | agd keys add "${WHALE_KEYNAME}_${keynum}" --index $keynum --recover --home "$AGORIC_HOME"  --keyring-backend test
+    echo "$WHALE_SEED" | $(ag_binary) keys add "${WHALE_KEYNAME}_${keynum}" --index "$keynum" --recover --home "$AGORIC_HOME"  --keyring-backend test
 }
 
 create_self_key () {
-    agd keys add self --home "$AGORIC_HOME" --keyring-backend test > /state/self.out 2>&1
+    $(ag_binary) keys add self --home "$AGORIC_HOME" --keyring-backend test > /state/self.out 2>&1
     tail -n1 /state/self.out > /state/self.key
-    key_address=$(agd keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
+    key_address=$($(ag_binary) keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
     echo "$key_address" > /state/self.address
 }
 
 ensure_self_solo_key () {
     key_file=/state/self.key
     if [ -f "$key_file" ]; then
-        if ! agd keys show self --home "$AGORIC_HOME" --keyring-backend=test; then
-            < "$key_file" agd keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
+        if ! $(ag_binary) keys show self --home "$AGORIC_HOME" --keyring-backend=test; then
+            < "$key_file" $(ag_binary) keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
         fi
         return
     fi
-    < $AG_SOLO_BASEDIR/ag-solo-mnemonic agd keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
-    cp $AG_SOLO_BASEDIR/ag-solo-mnemonic /state/self.key
-    key_address=$(agd keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
+    < "$AG_SOLO_BASEDIR/ag-solo-mnemonic" $(ag_binary) keys add self --recover --home "$AGORIC_HOME" --keyring-backend test
+    cp "$AG_SOLO_BASEDIR/ag-solo-mnemonic" /state/self.key
+    key_address=$($(ag_binary) keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
     echo "$key_address" > /state/self.address
 }
 
 tell_primary_about_validator () {
     while true; do
-        if status=$(agd status --home="$AGORIC_HOME"); then
+        if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
             break
         fi
         echo "node not yet up, waiting to register"
@@ -93,7 +99,7 @@ tell_primary_about_validator () {
     done
     echo "Node Up"
 
-    node_id=$(agd tendermint show-node-id --home "$AGORIC_HOME")
+    node_id=$($(ag_binary) tendermint show-node-id --home "$AGORIC_HOME")
     dial_result=$(curl --fail -m 15 -sS -g "$PRIMARY_ENDPOINT:26657/dial_peers?peers=[\"$node_id@$POD_IP:26656\"]&persistent=true&private=false")
     echo "Dialed Primary: $dial_result"
 
@@ -146,8 +152,8 @@ ensure_solo_provisioned () {
     amount=${1:-"500000000000000urun"}
     whale_key=$(get_whale_keyname)
     ensure_balance "$whale_key" "$amount" "$address"
-    while ! agd query swingset egress "$address" --node="$PRIMARY_ENDPOINT:26657"; do
-        agd tx swingset provision-one "$PODNAME" "$address" \
+    while ! $(ag_binary) query swingset egress "$address" --node="$PRIMARY_ENDPOINT:26657"; do
+        $(ag_binary) tx swingset provision-one "$PODNAME" "$address" \
           -y --home "$AGORIC_HOME" --keyring-backend test --from self \
           --node "${PRIMARY_ENDPOINT}:26657" -y --chain-id="$CHAIN_ID" -b block
         sleep $(( ( RANDOM % 4 )  + 10 ))
@@ -176,17 +182,17 @@ run_tasks () {
 
 wait_till_syncup_and_register () {
     while true; do
-        if status=$(agd status --home="$AGORIC_HOME"); then
+        if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
             if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
                 if [[ $parsed == "false" ]]; then
                     echo "caught up, register validator"
                     stakeamount="50000000ubld"
                     ensure_balance "$(get_whale_keyname)" "$stakeamount"
                     sleep 10
-                    agd tx staking create-validator \
+                    $(ag_binary) tx staking create-validator \
   --home="$AGORIC_HOME" \
   --amount="${stakeamount}" \
-  --pubkey="$(agd tendermint show-validator  --home=$AGORIC_HOME)" \
+  --pubkey="$($(ag_binary) tendermint show-validator  --home=$AGORIC_HOME)" \
   --moniker="$PODNAME" \
   --website="http://$POD_IP:26657" \
   --details="" \
@@ -219,7 +225,7 @@ ensure_balance () {
     
     want=${amount//,/ }
     while true; do
-        have=$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:26657" -ojson | jq -r '.balances')
+        have=$($(ag_binary) query bank balances "$to" --node "$PRIMARY_ENDPOINT:26657" -ojson | jq -r '.balances')
         needed=
         sep=
         for valueDenom in $want; do
@@ -238,7 +244,7 @@ ensure_balance () {
             echo "$to now has at least $amount"
             break
         fi
-        if agd tx bank send -b block "$from" "$to" "$needed" \
+        if $(ag_binary) tx bank send -b block "$from" "$to" "$needed" \
           --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test \
           --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"; then
             echo "successfully sent $amount to $to"
@@ -264,7 +270,7 @@ start_helper () {
 
 start_chain () {
     # shellcheck disable=SC2068
-    agd start --home="$AGORIC_HOME" --log_format=json $@ 2>&1 | tee -a /state/app.log
+    $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ 2>&1 | tee -a /state/app.log
 }
 hang () {
     while true; do sleep 30; done
@@ -288,18 +294,20 @@ get_ips() {
 }
 
 ###
-if [[ -z "${ENABLE_TELEMETRY}" ]]; then
-  echo "skipping telemetry since ENABLE_TELEMETRY is not set"
-  unset OTEL_EXPORTER_OTLP_ENDPOINT
-  unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
-  echo "starting telemetry collector"
-  OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
-  cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
-  sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
-    -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-    "$HOME/instagoric-otel-config.yaml"
-  /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
+if [[ -z "$AG0_MODE" ]]; then 
+    if [[ -z "${ENABLE_TELEMETRY}" ]]; then
+    echo "skipping telemetry since ENABLE_TELEMETRY is not set"
+    unset OTEL_EXPORTER_OTLP_ENDPOINT
+    unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
+            echo "starting telemetry collector"
+            OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
+            cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
+            sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
+                -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
+                "$HOME/instagoric-otel-config.yaml"
+            /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
+    fi
 fi
 
 
@@ -307,8 +315,23 @@ echo "ROLE: $ROLE"
 echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
 
+if [[ -z "$AG0_MODE" ]]; then 
 whaleamount="10000000000000000ubld,10000000000000000urun,1000000provisionpass"
+else
+whaleamount="10000000000000000ubld"
+fi
+
 whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie"
+
+if [[ -n "$AG0_MODE" ]]; then
+    #even more terrible hack to get nodejs into our image
+    if [ ! -f "/state/nodesetup" ]; then
+        curl -fsSL https://deb.nodesource.com/setup_lts.x > /state/nodesetup
+    fi
+    /bin/bash /state/nodesetup
+    apt-get install -y nodejs
+    npm install -g yarn
+fi
 
 if [[ $ROLE == "ag-solo" ]]; then
     if [[ ! -f "$AG_SOLO_BASEDIR/ag-solo-mnemonic" ]]; then
@@ -316,34 +339,38 @@ if [[ $ROLE == "ag-solo" ]]; then
         firstboot="true"
     fi
 else
-    if [[ -n "${GC_INTERVAL}" ]]; then      
-        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
-#        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
-        export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
-    fi
-
-    if [[ -n "${ECON_SOLO_SEED}" ]]; then
-        econ_addr=$(echo "$ECON_SOLO_SEED" | agd keys add econ --dry-run --recover --output json | jq -r .address)
-#        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
-        sed "s/@FIRST_SOLO_ADDRESS@/$econ_addr/g" /config/network/economy-proposals.json > /tmp/formatted_proposals.json
-        source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config.json"
-        if [[ -f /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json ]]; then
-            source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json"
+    if [[ -z "$AG0_MODE" ]]; then 
+        if [[ -n "${GC_INTERVAL}" ]]; then      
+            jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
+    #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+            export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
         fi
 
-        contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
-        export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
-    fi
+        if [[ -n "${ECON_SOLO_SEED}" ]]; then
+            econ_addr=$(echo "$ECON_SOLO_SEED" | $(ag_binary) keys add econ --dry-run --recover --output json | jq -r .address)
+    #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+            sed "s/@FIRST_SOLO_ADDRESS@/$econ_addr/g" /config/network/economy-proposals.json > /tmp/formatted_proposals.json
+            source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config.json"
+            if [[ -f /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json ]]; then
+                source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json"
+            fi
 
+            contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
+            export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
+        fi
+    fi
     #agd firstboot
     if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
         # ari's terrible docker fix, please eventually remove
         apt-get install -y nano tmux netcat
 
+
         firstboot="true"
         echo "Initializing chain"
-        agd init --home "$AGORIC_HOME" --chain-id "$CHAIN_ID" "$PODNAME"
-        agoric set-defaults ag-chain-cosmos $AGORIC_HOME/config
+        $(ag_binary) init --home "$AGORIC_HOME" --chain-id "$CHAIN_ID" "$PODNAME"
+        if [[ -z "$AG0_MODE" ]]; then 
+            agoric set-defaults ag-chain-cosmos "$AGORIC_HOME"/config
+        fi
 
         # Preserve the node key for this state.
         if [[ ! -f /state/node_key.json ]]; then
@@ -352,35 +379,36 @@ else
         cp /state/node_key.json "$AGORIC_HOME/config/node_key.json"
 
         if [[ $ROLE == "validator-primary" ]]; then
-            if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then      
-                timestamp=$(date +%s)
-                curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST  \
-                    -H "X-Honeycomb-Team: $HONEYCOMB_API_KEY"  \
-                    -d "{\"message\":\"GC_INTERVAL: ${GC_INTERVAL}\", \"type\":\"deploy\", \"start_time\":${timestamp}}"
+            if [[ -z "$AG0_MODE" ]]; then 
+                if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then      
+                    timestamp=$(date +%s)
+                    curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST  \
+                        -H "X-Honeycomb-Team: $HONEYCOMB_API_KEY"  \
+                        -d "{\"message\":\"GC_INTERVAL: ${GC_INTERVAL}\", \"type\":\"deploy\", \"start_time\":${timestamp}}"
+                fi
             fi
-
             create_self_key
-            agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
+            $(ag_binary) add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
 
 
             # get the whale offset for econ funding ag-solo-manual-0
             ag_solo_manual_idx=$(get_whale_index ag-solo-manual-0)
             if [[ -n $WHALE_SEED ]]; then
-              for ((i=0; i <= $WHALE_DERIVATIONS; i++)); do 
+              for ((i=0; i <= WHALE_DERIVATIONS; i++)); do 
                   thisamount=$whaleamount
                   if (( i == ag_solo_manual_idx )); then
                       thisamount=$whaleibcdenoms
                   fi
                   add_whale_key $i &&
-                  agd add-genesis-account "${WHALE_KEYNAME}_${i}" $thisamount --keyring-backend test --home "$AGORIC_HOME" 
+                  $(ag_binary) add-genesis-account "${WHALE_KEYNAME}_${i}" $thisamount --keyring-backend test --home "$AGORIC_HOME" 
               done
             fi
             if [[ -n $FAUCET_ADDRESS ]]; then
               #faucet
-              agd add-genesis-account "$FAUCET_ADDRESS" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME" 
+              $(ag_binary) add-genesis-account "$FAUCET_ADDRESS" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME" 
             fi
             
-            agd gentx self 50000000ubld \
+            $(ag_binary) gentx self 50000000ubld \
                 --chain-id=$CHAIN_ID \
                 --moniker="agoric0" \
                 --ip="127.0.0.1" \
@@ -393,17 +421,28 @@ else
                 --keyring-backend=test \
                 --home "$AGORIC_HOME"
             
-            agd collect-gentxs --home "$AGORIC_HOME"
+            $(ag_binary) collect-gentxs --home "$AGORIC_HOME"
             
             
-            contents="$(jq ".app_state.swingset.params.bootstrap_vat_config = \"$BOOTSTRAP_CONFIG\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+            if [[ -z "$AG0_MODE" ]]; then 
+                contents="$(jq ".app_state.swingset.params.bootstrap_vat_config = \"$BOOTSTRAP_CONFIG\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+            else
+
+                contents="$(jq ".app_state.crisis.constant_fee.denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+                contents="$(jq ".app_state.mint.params.mint_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+                contents="$(jq ".app_state.gov.deposit_params.min_deposit[0].denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+                contents="$(jq ".app_state.staking.params.bond_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+
+            fi
             contents="$(jq ".app_state.gov.voting_params.voting_period = \"$VOTING_PERIOD\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
 
-            if [[ -n "${BLOCK_COMPUTE_LIMIT}" ]]; then
-                # TODO: Select blockComputeLimit by name instead of index
-                contents="$(jq ".app_state.swingset.params.beans_per_unit[0].beans = \"$BLOCK_COMPUTE_LIMIT\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
-            fi
+            if [[ -z "$AG0_MODE" ]]; then 
 
+                if [[ -n "${BLOCK_COMPUTE_LIMIT}" ]]; then
+                    # TODO: Select blockComputeLimit by name instead of index
+                    contents="$(jq ".app_state.swingset.params.beans_per_unit[0].beans = \"$BLOCK_COMPUTE_LIMIT\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" > $AGORIC_HOME/config/genesis.json
+                fi
+            fi
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json 
 
         else
@@ -455,13 +494,16 @@ case "$ROLE" in
         
         # external_address=$(get_ips validator-primary-ext)
         # sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
-        if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-            export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+        if [[ -z "$AG0_MODE" ]]; then 
+            if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+            fi
         fi
-
         patch_validator_config
 
-        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        if [[ -z "$AG0_MODE" ]]; then 
+            export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        fi
         start_chain
         ;;
 
@@ -484,16 +526,21 @@ case "$ROLE" in
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &
         fi
-        if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-            export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
-        fi
-        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        if [[ -z "$AG0_MODE" ]]; then 
 
+            if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+            fi
+            export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        fi
         patch_validator_config
 
         start_chain
         ;;
     "ag-solo")
+        if [[ -n "$AG0_MODE" ]]; then 
+            exit 1
+        fi
         if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
             export SOLO_MNEMONIC=$ECON_SOLO_SEED
         fi
@@ -551,3 +598,4 @@ esac
 if [ -f "/state/hang" ]; then
     hang
 fi
+hang
