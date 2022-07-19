@@ -47,6 +47,12 @@ spec:
                   name: instagoric-release
                   key: BOOTSTRAP_CONFIG
                   optional: true
+            - name: NETPURPOSE
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: NETPURPOSE
+                  optional: true
             - name: CHAIN_ID
               valueFrom:
                 configMapKeyRef:

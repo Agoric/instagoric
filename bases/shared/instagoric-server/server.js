@@ -209,7 +209,11 @@ publicapp.get('/', (req, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${chainId}
+Chain: ${chainId}${
+    process.env.NETPURPOSE !== undefined
+      ? `\nPurpose: ${process.env.NETPURPOSE}`
+      : ''
+  }
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
 RPC: <a href="https://${netname}.rpc${domain}">https://${netname}.rpc${domain}</a>
