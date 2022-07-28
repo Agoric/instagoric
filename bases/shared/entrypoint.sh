@@ -149,7 +149,7 @@ ensure_solo_provisioned () {
     address="$(solo_addr)"
     echo "provisioning solo $address"
     ensure_self_solo_key
-    amount=${1:-"500000000000000urun"}
+    amount=${1:-"500000000000000uist"}
     whale_key=$(get_whale_keyname)
     ensure_balance "$whale_key" "$amount" "$address"
     while ! $(ag_binary) query swingset egress "$address" --node="$PRIMARY_ENDPOINT:26657"; do
@@ -316,7 +316,7 @@ echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
 
 if [[ -z "$AG0_MODE" ]]; then 
-whaleamount="10000000000000000ubld,10000000000000000urun,1000000provisionpass"
+whaleamount="10000000000000000ubld,10000000000000000uist,1000000provisionpass"
 else
 whaleamount="10000000000000000ubld"
 fi
@@ -568,7 +568,7 @@ case "$ROLE" in
         if [[ -n "${ECON_SOLO_SEED}" ]] && [[ $PODNAME == "ag-solo-manual-0" ]]; then
             export SOLO_FUNDING_AMOUNT=$whaleibcdenoms
         fi
-        (ensure_solo_provisioned "${SOLO_FUNDING_AMOUNT:-"900000000000000urun,900000000000000ubld,1provisionpass"}") &
+        (ensure_solo_provisioned "${SOLO_FUNDING_AMOUNT:-"900000000000000uist,900000000000000ubld,1provisionpass"}") &
 
         if [[ $SUBROLE == "tasks" ]]; then
             ( sleep 60 && run_tasks ) &

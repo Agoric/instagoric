@@ -68,4 +68,4 @@ patches:
         path: /spec/template/spec/containers/0/env/-
         value: 
           name: SOLO_FUNDING_AMOUNT
-          value: 9000000000000000ubld,9000000000000000urun,1provisionpass
+          value: 9000000000000000ubld,9000000000000000uist,1provisionpass

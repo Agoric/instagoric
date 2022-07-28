@@ -1,7 +1,7 @@
 // @ts-check
-import '@agoric/zoe/exported.js';
-import '@agoric/vats/exported.js';
-import '@agoric/run-protocol/exported.js';
+import "@agoric/zoe/exported.js";
+import "@agoric/vats/exported.js";
+import "@agoric/inter-protocol/exported.js";
 
 export {};
 

@@ -12,7 +12,7 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
-const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || '25000000urun';
+const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || '25000000uist';
 const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const FAUCET_KEYNAME =
