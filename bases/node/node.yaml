@@ -89,6 +89,12 @@ spec:
                   name: instagoric-release
                   key: BLOCK_COMPUTE_LIMIT
                   optional: true
+            - name: GC_INTERVAL
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: GC_INTERVAL
+                  optional: true
             - name: CONSENSUS_TIMEOUT_PROPOSE
               valueFrom:
                 configMapKeyRef:
