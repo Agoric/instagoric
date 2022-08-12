@@ -119,6 +119,12 @@ spec:
                   name: instagoric-release
                   key: CONSENSUS_TIMEOUT_PRECOMMIT
                   optional: true
+            - name: NODE_HEAP_SNAPSHOTS
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: NODE_HEAP_SNAPSHOTS
+                  optional: true
             - name: PRUNING
               valueFrom:
                 configMapKeyRef:
