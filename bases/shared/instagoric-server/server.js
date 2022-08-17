@@ -339,7 +339,7 @@ const startFaucetWorker = async () => {
       console.log('dequeued', address);
       const request = addressToRequest.get(address);
 
-      const command = request[1];
+      const [_a, command, clientType] = request;
       let exitCode = 1;
       switch (command) {
         case 'client': {
@@ -353,7 +353,7 @@ const startFaucetWorker = async () => {
 `.exitCode;
             if (exitCode === 0) {
               exitCode = await $`\
-            ${agBinary} tx swingset provision-one faucet_provision ${address} \
+            ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
   -b block --from ${FAUCET_KEYNAME} \
   -y --keyring-backend test --keyring-dir=${agoricHome} \
   --chain-id=${chainId} --node http://localhost:26657 \
@@ -404,7 +404,12 @@ privateapp.listen(privateport, () => {
 faucetapp.get('/', (req, res) => {
   const clientText = !AG0_MODE
     ? `<input type="radio" id="client" name="command" value="client">
-<label for="client">client</label><br>`
+<label for="client">client</label>
+<select name="clientType">
+<option value="SMART_WALLET">smart wallet</option>
+<option value="REMOTE_WALLET">ag-solo</option>
+</select>
+<br>`
     : '';
   res.send(
     `<html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
@@ -426,15 +431,16 @@ faucetapp.use(
 );
 
 faucetapp.post('/go', (req, res) => {
-  const { command, address } = req.body;
+  const { command, address, clientType } = req.body;
 
   if (
-    (command === 'client' || command === 'delegate') &&
+    ((command === 'client' && ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType))
+     || command === 'delegate') &&
     typeof address === 'string' &&
     address.length === 45 &&
     /^agoric1[0-9a-zA-Z]{38}$/.test(address)
   ) {
-    addRequest(address, [res, command]);
+    addRequest(address, [res, command, clientType]);
   } else {
     res.status(403).send('invalid form');
   }
