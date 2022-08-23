@@ -73,18 +73,17 @@ const trade = async (
   `;
   submit.quiet();
   const { txhash } = JSON.parse((await submit).stdout);
-  console.info({ txhash });
+  console.info('txhash', txhash, 'for offer at', target);
 
   let elapsed = 0;
   for (;;) {
     const walletStatus = await getStatus();
     const found = walletStatus.offers.find(([dateTime]) => dateTime === target);
-    console.info(JSON.stringify(found));
+    console.info(JSON.stringify(found || [target, null]));
     const [dateTime, offerStatus] = found || [];
     switch (offerStatus) {
       case 'accept':
-        console.info({ creationStamp, elapsed });
-        return { offer: found, elapsed, txhash };
+        return { offer: found, elapsed, chainId, txhash };
       case 'rejected':
         throw Error(`${method} offer at ${dateTime} rejected`);
       default:
@@ -94,4 +93,44 @@ const trade = async (
   }
 };
 
-await trade(psmInstance, 'wantStable', 10, account.name, networks.local);
+const manyTrades = async (todo, simultaneous) => {
+  let done = 0;
+  let inProgress = new Set();
+
+  const go = async () => {
+    if (done + inProgress.size >= todo) return;
+
+    const method = done < 3 || done % 2 === 0 ? 'wantStable' : 'giveStable';
+    const qty = 4 + (done % 12);
+    const job = trade(psmInstance, method, qty, account.name, networks.local);
+    inProgress.add(job);
+
+    job
+      .then(result => {
+        done += 1;
+        console.info(done, 'of', todo, ':', JSON.stringify(result));
+        inProgress.delete(job);
+      })
+      .catch(err => {
+        // TODO: which job?
+        console.error('job failed:', err);
+      })
+      .finally(go);
+    return Promise.all([
+      job,
+      (async () => {
+        await sleep(500); // half a sec between jobs
+        if (inProgress.size < simultaneous) {
+          return go();
+        }
+      })(),
+    ]);
+  };
+  return go();
+};
+
+// console.log(process.argv);
+const [_node, _script, qtyS, simS] = process.argv;
+const [qty, sim] = [Number(qtyS), Number(simS)];
+
+await manyTrades(qty, sim);
