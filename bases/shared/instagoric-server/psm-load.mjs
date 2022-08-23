@@ -8,13 +8,17 @@ const psmGov = {
   GiveStableFee: 0.03,
 };
 
-const { HOME } = process.env;
+const networks = {
+  local: { rpc: 'http://0.0.0.0:26657', chainId: 'agoric' },
+  xnet: { rpc: 'https://xnet.rpc.agoric.net:443', chainId: 'agoricxnet-13' },
+};
 
-const agoricSDK = `${HOME}/projects/agoric-sdk`;
-const psmTool = `${agoricSDK}/packages/inter-protocol/scripts/psm-tool.js`;
-const agd = `${HOME}/go/bin/agd`;
+const { AGORIC_D, PSM_TOOL } = process.env;
 
-const psmInstance = await $`node --experimental-fetch ${psmTool} --contract`;
+const psmTool = PSM_TOOL || 'psm-tool';
+const agd = AGORIC_D || `agd`;
+
+const psmInstance = await $`${psmTool} --contract`;
 // console.debug(psmInstance);
 
 const ensureAccount = async () => {
@@ -30,9 +34,7 @@ const ensureAccount = async () => {
 const account = await ensureAccount();
 
 const getStatus = async () => {
-  const txt = (
-    await $`node --experimental-fetch ${psmTool} --wallet ${account.address}`
-  ).stdout;
+  const txt = (await $`${psmTool} --wallet ${account.address}`).stdout;
   // undo console.log() abbreviation of keys, JSON.string() of parts
   const json = txt.replace(/(balances|offers):/gm, '"$1":').replace(/'/gm, '');
   return JSON.parse(json);
@@ -44,13 +46,12 @@ const trade = async (
   method,
   qty,
   keyName,
-  node = 'https://xnet.rpc.agoric.net:443',
-  chainId = 'agoricxnet-13',
+  { rpc: node, chainId } = networks.xnet,
 ) => {
   const feePct =
     method === 'wantStable' ? psmGov.WantStableFee : psmGov.GiveStableFee;
   // why doesn't $`...`.quiet() work?
-  const out = $`node ${psmTool} --boardId ${boardId} --${method} ${qty} --feePct ${
+  const out = $`${psmTool} --boardId ${boardId} --${method} ${qty} --feePct ${
     feePct + 0.001
   }`;
   const spendAction = JSON.parse((await out).stdout);
@@ -79,9 +80,9 @@ const trade = async (
         throw Error(`${method} offer at ${dateTime} rejected`);
       default:
         console.info(found);
-        sleep((blockTime / 2) * 1000); // nyquist: observe at 2x freq
+        await sleep((blockTime / 2) * 1000); // nyquist: observe at 2x freq
     }
   }
 };
 
-await trade(psmInstance, 'wantStable', 10, account.name);
+await trade(psmInstance, 'wantStable', 10, account.name, networks.local);
