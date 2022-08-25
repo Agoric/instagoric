@@ -12,7 +12,8 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
-const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || '25000000uist';
+const CLIENT_AMOUNT =
+  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/usdc1234';
 const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const FAUCET_KEYNAME =
@@ -434,8 +435,9 @@ faucetapp.post('/go', (req, res) => {
   const { command, address, clientType } = req.body;
 
   if (
-    ((command === 'client' && ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType))
-     || command === 'delegate') &&
+    ((command === 'client' &&
+      ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
+      command === 'delegate') &&
     typeof address === 'string' &&
     address.length === 45 &&
     /^agoric1[0-9a-zA-Z]{38}$/.test(address)

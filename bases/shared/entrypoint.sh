@@ -316,12 +316,12 @@ echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
 
 if [[ -z "$AG0_MODE" ]]; then 
-whaleamount="10000000000000000ubld,10000000000000000uist,1000000provisionpass"
+whaleamount="10000000000000000ubld,10000000000000000uist,10000000000000000ibc/usdc1234,1000000provisionpass"
 else
 whaleamount="10000000000000000ubld"
 fi
 
-whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie"
+whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234"
 
 if [[ -n "$AG0_MODE" ]]; then
     #even more terrible hack to get nodejs into our image
