@@ -149,6 +149,24 @@ spec:
                   name: telemetry-secrets
                   key: HONEYCOMB_API_KEY
                   optional: true
+            - name: DD_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: telemetry-secrets
+                  key: DD_API_KEY
+                  optional: true
+            - name: DD_SITE
+              valueFrom:
+                secretKeyRef:
+                  name: telemetry-secrets
+                  key: DD_SITE
+                  optional: true
+            - name: DD_TRACES
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-release
+                  key: DD_TRACES
+                  optional: true
             - name: ENABLE_TELEMETRY
               valueFrom:
                 secretKeyRef:

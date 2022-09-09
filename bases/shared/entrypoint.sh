@@ -300,11 +300,20 @@ if [[ -z "$AG0_MODE" ]]; then
     unset OTEL_EXPORTER_OTLP_ENDPOINT
     unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
     elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
+            if [[ $DD_TRACES == "true" ]]; then
+                DD_TRACES=",datadog"
+            else
+                DD_TRACES=""
+            fi
             echo "starting telemetry collector"
             OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
             cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
             sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
                 -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
+                -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
+                -e "s/@DD_SITE@/${DD_SITE}/" \
+                -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
+                -e "s/@DD_TRACES@/${DD_TRACES}/" \
                 "$HOME/instagoric-otel-config.yaml"
             /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
     fi
@@ -466,6 +475,7 @@ else
         sed -i.bak 's/^max_num_outbound_peers =.*/max_num_outbound_peers = 150/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak '/^\[telemetry]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26652"/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[telemetry]/,/^\[/{s/^prometheus-retention-time[[:space:]]*=.*/prometheus-retention-time = 60/}' "$AGORIC_HOME/config/app.toml"
+        sed -i.bak '/^\[telemetry]/,/^\[/{s/^enabled[[:space:]]*=.*/enabled = true/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[api]/,/^\[/{s/^enable[[:space:]]*=.*/enable = true/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[api]/,/^\[/{s/^enabled-unsafe-cors[[:space:]]*=.*/enabled-unsafe-cors = true/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[api]/,/^\[/{s/^swagger[[:space:]]*=.*/swagger = false/}' "$AGORIC_HOME/config/app.toml"
