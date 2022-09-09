@@ -325,12 +325,10 @@ echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
 
 if [[ -z "$AG0_MODE" ]]; then 
-whaleamount="10000000000000000ubld,10000000000000000uist,10000000000000000ibc/usdc1234,1000000provisionpass"
+whaleibcdenoms="10000000000000000ubld,10000000000000000uist,1000000provisionpass,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234,1000000000000000000ibc/usdt1234"
 else
-whaleamount="10000000000000000ubld"
+whaleibcdenoms="10000000000000000ubld"
 fi
-
-whaleibcdenoms="$whaleamount,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234"
 
 if [[ -n "$AG0_MODE" ]]; then
     #even more terrible hack to get nodejs into our image
@@ -400,16 +398,10 @@ else
             $(ag_binary) add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME" 
 
 
-            # get the whale offset for econ funding ag-solo-manual-0
-            ag_solo_manual_idx=$(get_whale_index ag-solo-manual-0)
             if [[ -n $WHALE_SEED ]]; then
               for ((i=0; i <= WHALE_DERIVATIONS; i++)); do 
-                  thisamount=$whaleamount
-                  if (( i == ag_solo_manual_idx )); then
-                      thisamount=$whaleibcdenoms
-                  fi
                   add_whale_key $i &&
-                  $(ag_binary) add-genesis-account "${WHALE_KEYNAME}_${i}" $thisamount --keyring-backend test --home "$AGORIC_HOME" 
+                  $(ag_binary) add-genesis-account "${WHALE_KEYNAME}_${i}" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME" 
               done
             fi
             if [[ -n $FAUCET_ADDRESS ]]; then
