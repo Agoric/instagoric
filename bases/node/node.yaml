@@ -163,7 +163,7 @@ spec:
                   optional: true
             - name: DD_TRACES
               valueFrom:
-                secretKeyRef:
+                configMapKeyRef:
                   name: instagoric-release
                   key: DD_TRACES
                   optional: true
