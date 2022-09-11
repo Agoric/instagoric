@@ -2,6 +2,8 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: node
+  annotations:
+    ad.datadoghq.com/node.logs: '[{"source":"node","service":"instagoric"}]'
 spec:
   podManagementPolicy: "Parallel"
   selector:
@@ -198,6 +200,9 @@ spec:
                   optional: true
             - name: OTEL_EXPORTER_PROMETHEUS_PORT
               value: "26661"
+            # The k8s.pod.ip is used to associate pods for k8sattributes
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "k8s.pod.ip=$(POD_IP)"
           ports:
             - containerPort: 26656
               name: p2p

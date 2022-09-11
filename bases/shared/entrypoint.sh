@@ -262,7 +262,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start
+        yarn start 2>&1 | tee -a /state/server.log
         sleep 1
       done
     )
@@ -301,18 +301,20 @@ if [[ -z "$AG0_MODE" ]]; then
     unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
     elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
             if [[ $DD_TRACES == "true" ]]; then
-                DD_TRACES=",datadog"
+                DD_TRACES=",otlphttp\\/datadogagent"
             else
                 DD_TRACES=""
             fi
             echo "starting telemetry collector"
             OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
             cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
+            container_id=$(cat /proc/self/cgroup | grep systemd | head -1 | cut -d/ -f4)
+            export CONTAINER_ID="$container_id"
+
             sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
                 -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-                -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
-                -e "s/@DD_SITE@/${DD_SITE}/" \
                 -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
+                -e "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
                 -e "s/@DD_TRACES@/${DD_TRACES}/" \
                 "$HOME/instagoric-otel-config.yaml"
             /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
@@ -576,7 +578,7 @@ case "$ROLE" in
             ( sleep 60 && run_tasks ) &
         fi
 
-        ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 2>&1 | tee -a /state/app.log
+        ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 2>&1 | tee -a /state/agsolo.log
         ;;
     "seed")
         if [[ $firstboot == "true" ]]; then

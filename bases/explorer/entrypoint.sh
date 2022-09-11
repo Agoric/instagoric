@@ -14,4 +14,4 @@ cat /tmp/1.json | sed "s/^.*\"rpc\": .*/    \"rpc\": [\"https:\/\/${NETNAME}.rpc
 cat vue.config.js | sed "s/devServer: {/devServer: {allowedHosts: 'all',/g" > /tmp/v.js
 mv /tmp/v.js vue.config.js
 
-yarn && ./node_modules/.bin/vue-cli-service serve --mode=production --port=8080
+yarn && ./node_modules/.bin/vue-cli-service serve --mode=production --port=8080 
