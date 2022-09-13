@@ -55,6 +55,13 @@ const namespace =
     flag: 'r',
   });
 
+const revision = fs
+  .readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
+    encoding: 'utf8',
+    flag: 'r',
+  })
+  .trim();
+
 /**
  * @param {string} relativeUrl
  * @returns {Promise<any>}
@@ -215,6 +222,9 @@ Chain: ${chainId}${
       ? `\nPurpose: ${process.env.NETPURPOSE}`
       : ''
   }
+Revision: ${revision}
+Docker Tag: agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
+Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
 RPC: <a href="https://${netname}.rpc${domain}">https://${netname}.rpc${domain}</a>
