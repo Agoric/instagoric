@@ -208,6 +208,15 @@ wait_till_syncup_and_register () {
   --gas-adjustment=1.4 \
   -y
                 touch "$AGORIC_HOME/registered"
+
+                sleep 10 
+                if [[ -z "$AG0_MODE" ]]; then 
+                    stakeamount="1234000000000ibc/usdc1234"
+                    ensure_balance "$(get_whale_keyname)" "$stakeamount" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346"
+                    sleep 10
+                    touch "$AGORIC_HOME/fundedprovision"
+                fi 
+
                 return
                 else
                     echo "not caught up, waiting to register validator"
@@ -217,6 +226,7 @@ wait_till_syncup_and_register () {
         sleep 5
     done
 }
+
 
 ensure_balance () {
     from=$1
@@ -536,8 +546,10 @@ case "$ROLE" in
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &
         fi
+        
+        
         if [[ -z "$AG0_MODE" ]]; then 
-
+        
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
                 export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
             fi
