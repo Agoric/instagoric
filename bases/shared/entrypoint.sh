@@ -210,13 +210,6 @@ wait_till_syncup_and_register () {
                 touch "$AGORIC_HOME/registered"
 
                 sleep 10 
-                if [[ -z "$AG0_MODE" ]]; then 
-                    stakeamount="1234000000000ibc/usdc1234"
-                    ensure_balance "$(get_whale_keyname)" "$stakeamount" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346"
-                    sleep 10
-                    touch "$AGORIC_HOME/fundedprovision"
-                fi 
-
                 return
                 else
                     echo "not caught up, waiting to register validator"
@@ -226,6 +219,36 @@ wait_till_syncup_and_register () {
         sleep 5
     done
 }
+
+
+wait_till_syncup_and_fund () {
+    if [[ -z "$AG0_MODE" ]]; then 
+        while true; do
+            if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
+                if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
+                    if [[ $parsed == "false" ]]; then
+                        sleep 30
+                        stakeamount="1234000000000ibc/usdc1234"
+
+                        $(ag_binary) tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
+                            --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"
+                        touch "$AGORIC_HOME/registered"
+
+                        sleep 10 
+                        return
+                    else
+                        echo "not caught up, waiting to fund provision account"
+                    fi
+                fi
+            fi
+            sleep 5
+        done
+    fi 
+
+}
+
+
+
 
 
 ensure_balance () {
@@ -524,6 +547,10 @@ case "$ROLE" in
         if [[ -z "$AG0_MODE" ]]; then 
             export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         fi
+        if [[ ! -f "$AGORIC_HOME/registered" ]]; then
+            ( wait_till_syncup_and_fund ) &
+        fi
+
         start_chain
         ;;
 
