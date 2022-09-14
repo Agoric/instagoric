@@ -334,7 +334,7 @@ if [[ -z "$AG0_MODE" ]]; then
     unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
     elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
             if [[ $DD_TRACES == "true" ]]; then
-                DD_TRACES=",otlphttp\\/datadogagent"
+                DD_TRACES=",datadog"
             else
                 DD_TRACES=""
             fi
@@ -349,6 +349,8 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
                 -e "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
                 -e "s/@DD_TRACES@/${DD_TRACES}/" \
+                -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
+                -e "s/@DD_SITE@/${DD_SITE}/" \
                 "$HOME/instagoric-otel-config.yaml"
             /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
     fi
