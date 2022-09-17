@@ -89,6 +89,12 @@ const makeKubernetesRequest = async relativeUrl => {
   return response.json();
 };
 
+const getMetricsRequest = async relativeUrl => {
+  const url = new URL('http://localhost:26661/metrics');
+  const response = await fetch(url.href);
+  return response.text();
+};
+
 // eslint-disable-next-line no-unused-vars
 async function getNodeId(node) {
   const response = await fetch(
@@ -176,6 +182,7 @@ class DataCache {
 }
 const ipsCache = new DataCache(getServices, 0.1);
 const networkConfig = new DataCache(getNetworkConfig, 0.5);
+const metricsCache = new DataCache(getMetricsRequest, 0.1);
 
 const publicapp = express();
 const privateapp = express();
@@ -243,6 +250,12 @@ publicapp.get('/network-config', async (req, res) => {
   res.setHeader('Content-type', 'text/plain;charset=UTF-8');
   res.setHeader('Access-Control-Allow-Origin', '*');
   const result = await networkConfig.getData();
+  res.send(result);
+});
+
+publicapp.get('/metrics-config', async (req, res) => {
+  res.setHeader('Content-type', 'text/plain;charset=UTF-8');
+  const result = await metricsCache.getData();
   res.send(result);
 });
 

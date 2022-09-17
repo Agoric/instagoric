@@ -16,6 +16,13 @@ export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 
+
+version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
+export DD_VERSION="$version"
+export DD_ENV=$CHAIN_ID
+export DD_SERVICE="agd"
+export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
+
 mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
@@ -303,7 +310,16 @@ start_helper () {
 
 start_chain () {
     # shellcheck disable=SC2068
-    $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ 2>&1 | tee -a /state/app.log
+    if [[ -z "$AG0_MODE" ]]; then 
+        extra=""
+        if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
+            extra=" -r dd-trace/init"
+            export SWINGSET_WORKER_TYPE=local
+        fi
+        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@ 2>&1 | tee -a /state/app.log)
+    else
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ 2>&1 | tee -a /state/app.log
+    fi
 }
 hang () {
     while true; do sleep 30; done
@@ -333,10 +349,9 @@ if [[ -z "$AG0_MODE" ]]; then
     unset OTEL_EXPORTER_OTLP_ENDPOINT
     unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
     elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
-            if [[ $DD_TRACES == "true" ]]; then
-                DD_TRACES=",datadog"
-            else
-                DD_TRACES=""
+            ddtracetarget=""
+            if [[ $DD_TRACE_ENABLED == "true" ]]; then
+                ddtracetarget=",datadog"
             fi
             echo "starting telemetry collector"
             OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
@@ -348,7 +363,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
                 -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
                 -e "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-                -e "s/@DD_TRACES@/${DD_TRACES}/" \
+                -e "s/@DD_TRACES@/${ddtracetarget}/" \
                 -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
                 -e "s/@DD_SITE@/${DD_SITE}/" \
                 "$HOME/instagoric-otel-config.yaml"

@@ -127,6 +127,10 @@ spec:
                   name: instagoric-release
                   key: NODE_HEAP_SNAPSHOTS
                   optional: true
+            - name: HOST_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
             - name: PRUNING
               valueFrom:
                 configMapKeyRef:
@@ -163,11 +167,17 @@ spec:
                   name: telemetry-secrets
                   key: DD_SITE
                   optional: true
-            - name: DD_TRACES
+            - name: DD_TRACE_ENABLED
               valueFrom:
                 configMapKeyRef:
                   name: instagoric-release
-                  key: DD_TRACES
+                  key: DD_TRACE_ENABLED
+                  optional: true
+            - name: DD_PROFILING_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: DD_PROFILING_ENABLED
                   optional: true
             - name: ENABLE_TELEMETRY
               valueFrom:
