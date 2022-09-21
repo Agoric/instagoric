@@ -15,7 +15,8 @@ export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
-
+export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
+mkdir -p $AGORIC_HOME
 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
 export DD_VERSION="$version"
@@ -234,8 +235,8 @@ wait_till_syncup_and_fund () {
             if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
                 if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
                     if [[ $parsed == "false" ]]; then
-                        sleep 30
-                        stakeamount="1234000000000ibc/usdc1234"
+                        sleep 300
+                        stakeamount="400000000ibc/usdc1234"
 
                         $(ag_binary) tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
                             --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"
@@ -314,7 +315,7 @@ start_chain () {
         extra=""
         if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
             extra=" -r dd-trace/init"
-            export SWINGSET_WORKER_TYPE=local
+            #export SWINGSET_WORKER_TYPE=local
         fi
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@ 2>&1 | tee -a /state/app.log)
     else
@@ -351,7 +352,7 @@ if [[ -z "$AG0_MODE" ]]; then
     elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
             ddtracetarget=""
             if [[ $DD_TRACE_ENABLED == "true" ]]; then
-                ddtracetarget=",datadog"
+                ddtracetarget=",\"otlphttp\\/datadogagent\""
             fi
             echo "starting telemetry collector"
             OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
@@ -367,7 +368,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
                 -e "s/@DD_SITE@/${DD_SITE}/" \
                 "$HOME/instagoric-otel-config.yaml"
-            /usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" &
+            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG"  2>&1 | tee -a /state/otel.log) &
     fi
 fi
 
@@ -400,8 +401,7 @@ if [[ $ROLE == "ag-solo" ]]; then
 else
     if [[ -z "$AG0_MODE" ]]; then 
         if [[ -n "${GC_INTERVAL}" ]]; then      
-            jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
-    #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+            jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > $BOOTSTRAP_CONFIG
             export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
         fi
 
@@ -416,6 +416,16 @@ else
 
             contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
             export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
+        fi
+        
+        if [[ -n "${PSM_GOV_A}" ]]; then
+            cp "$BOOTSTRAP_CONFIG" "$MODIFIED_BOOTSTRAP_PATH"
+            export BOOTSTRAP_CONFIG="$MODIFIED_BOOTSTRAP_PATH"
+            addr1=$(echo "$PSM_GOV_A" | agd keys add econ --dry-run --recover --output json | jq -r .address)
+            addr2=$(echo "$PSM_GOV_B" | agd keys add econ --dry-run --recover --output json | jq -r .address)
+            addr3=$(echo "$PSM_GOV_C" | agd keys add econ --dry-run --recover --output json | jq -r .address)
+
+            contents=`jq ".vats.bootstrap.parameters.economicCommitteeAddresses? |= {\"gov1\":\"$addr1\",\"gov2\":\"$addr2\",\"gov3\":\"$addr3\"}" $BOOTSTRAP_CONFIG` && echo -E "${contents}" > "$BOOTSTRAP_CONFIG"
         fi
     fi
     #agd firstboot

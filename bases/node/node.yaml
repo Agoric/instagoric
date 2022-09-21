@@ -191,6 +191,24 @@ spec:
                   name: instagoric-secrets
                   key: ECON_SOLO_SEED
                   optional: true
+            - name: PSM_GOV_A
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: PSM_GOV_A
+                  optional: true
+            - name: PSM_GOV_B
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: PSM_GOV_B
+                  optional: true
+            - name: PSM_GOV_C
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: PSM_GOV_C
+                  optional: true
             - name: NETNAME
               valueFrom:
                 configMapKeyRef:
