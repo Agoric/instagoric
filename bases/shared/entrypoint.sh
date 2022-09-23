@@ -235,7 +235,11 @@ wait_till_syncup_and_fund () {
             if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
                 if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
                     if [[ $parsed == "false" ]]; then
-                        sleep 300
+                        if [[ $DD_PROFILING_ENABLED == "true" ]]; then
+                            sleep 300
+                        else
+                            sleep 30
+                        fi
                         stakeamount="400000000ibc/usdc1234"
 
                         $(ag_binary) tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
@@ -419,7 +423,8 @@ else
         fi
         
         if [[ -n "${PSM_GOV_A}" ]]; then
-            cp "$BOOTSTRAP_CONFIG" "$MODIFIED_BOOTSTRAP_PATH"
+            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
+            cp "$resolved_config" "$MODIFIED_BOOTSTRAP_PATH"
             export BOOTSTRAP_CONFIG="$MODIFIED_BOOTSTRAP_PATH"
             addr1=$(echo "$PSM_GOV_A" | agd keys add econ --dry-run --recover --output json | jq -r .address)
             addr2=$(echo "$PSM_GOV_B" | agd keys add econ --dry-run --recover --output json | jq -r .address)

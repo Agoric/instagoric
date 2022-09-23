@@ -263,6 +263,8 @@ spec:
               mountPath: /config/otel
             - name: server
               mountPath: /config/server
+            - name: ramdisk
+              mountPath: /tmp
           resources:
             limits:
               cpu: 1000m
@@ -308,6 +310,9 @@ spec:
         - name: server
           configMap:
             name: server
+        - name: ramdisk
+          emptyDir:
+            medium: Memory
   volumeClaimTemplates:
     - metadata:
         name: state
