@@ -226,6 +226,24 @@ spec:
                   name: instagoric-release
                   key: DOCKERTAG
                   optional: true
+            - name: DELEGATE_AMOUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: DELEGATE_AMOUNT
+                  optional: true
+            - name: CLIENT_AMOUNT
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: CLIENT_AMOUNT
+                  optional: true
+            - name: SLOGSENDER_AGENT
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: SLOGSENDER_AGENT
+                  optional: true
             - name: OTEL_EXPORTER_PROMETHEUS_PORT
               value: "26661"
             # The k8s.pod.ip is used to associate pods for k8sattributes
