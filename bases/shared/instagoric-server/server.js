@@ -55,12 +55,18 @@ const namespace =
     flag: 'r',
   });
 
-const revision = fs
-  .readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
-    encoding: 'utf8',
-    flag: 'r',
-  })
-  .trim();
+const revision =
+  process.env.AG0_MODE === 'true'
+    ? 'ag0'
+    : fs
+        .readFileSync(
+          '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
+          {
+            encoding: 'utf8',
+            flag: 'r',
+          },
+        )
+        .trim();
 
 /**
  * @param {string} relativeUrl

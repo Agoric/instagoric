@@ -17,8 +17,11 @@ export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
 mkdir -p $AGORIC_HOME
-
+if [[ -z "$AG0_MODE" ]]; then 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
+else
+version=ag0
+fi
 export DD_VERSION="$version"
 export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
@@ -384,7 +387,7 @@ firstboot="false"
 if [[ -z "$AG0_MODE" ]]; then 
 whaleibcdenoms="10000000000000000ubld,10000000000000000uist,1000000provisionpass,1000000000000000000ibc/toyatom,2000000000000ibc/toyusdc,4000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234,1000000000000000000ibc/usdt1234"
 else
-whaleibcdenoms="10000000000000000ubld"
+whaleibcdenoms="10000000000000000ubld,1000000000000000000ibc/usdc1234"
 fi
 
 if [[ -n "$AG0_MODE" ]]; then
