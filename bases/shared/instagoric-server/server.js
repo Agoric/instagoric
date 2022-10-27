@@ -144,6 +144,7 @@ const getNetworkConfig = async () => {
       'validator-primary.instagoric.svc.cluster.local',
   );
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
+  ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
   ap.seeds[0] = ap.seeds[0].replace(
     'seed.instagoric.svc.cluster.local',
     svc.get('seed-ext') || 'seed.instagoric.svc.cluster.local',
