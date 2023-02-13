@@ -243,7 +243,7 @@ wait_till_syncup_and_fund () {
                         else
                             sleep 30
                         fi
-                        stakeamount="400000000ibc/usdc1234"
+                        stakeamount="400000000ibc/toyusdc"
 
                         $(ag_binary) tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
                             --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"

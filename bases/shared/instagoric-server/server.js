@@ -13,8 +13,8 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 const { details: X } = globalThis.assert;
 
 const CLIENT_AMOUNT =
-  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/usdc1234';
-const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld';
+  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
+const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const FAUCET_KEYNAME =
   process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
@@ -450,7 +450,14 @@ Request: <input type="radio" id="delegate" name="command" value="delegate">
 <label for="delegate">delegate</label> 
 ${clientText}
 <input type="submit" />
-</form></body></html>
+</form>
+<br>
+<br>
+
+<form action="/go" method="post"><input id="address" name="address" type="hidden" value="agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" />
+<input type="hidden" name="command" value="delegate" /><input type="submit" value="fund provision pool" />
+</form>
+</body></html>
 `,
   );
 });
