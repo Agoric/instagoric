@@ -247,6 +247,12 @@ API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 
+UIs:
+Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
+Jumper Page: <a href="https://app.inter.trade/?network=${netname}">https://app.inter.trade/?network=${netname}</a>
+
+
+
 ----
 See more at <a href="https://agoric.com">https://agoric.com</a>
 </pre></body></html>                                                     
