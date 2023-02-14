@@ -250,6 +250,12 @@ spec:
                   name: instagoric-release
                   key: SLOGSENDER_AGENT_DD_PROFILING_ENABLED
                   optional: true
+            - name: ENDORSED_UI
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: ENDORSED_UI
+                  optional: true
             - name: OTEL_EXPORTER_PROMETHEUS_PORT
               value: "26661"
             # The k8s.pod.ip is used to associate pods for k8sattributes

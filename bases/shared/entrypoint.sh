@@ -412,6 +412,7 @@ else
             export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
         fi
 
+
         if [[ -n "${ECON_SOLO_SEED}" ]]; then
             econ_addr=$(echo "$ECON_SOLO_SEED" | $(ag_binary) keys add econ --dry-run --recover --output json | jq -r .address)
     #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
@@ -434,6 +435,14 @@ else
             addr3=$(echo "$PSM_GOV_C" | agd keys add econ --dry-run --recover --output json | jq -r .address)
 
             contents=`jq ".vats.bootstrap.parameters.economicCommitteeAddresses? |= {\"gov1\":\"$addr1\",\"gov2\":\"$addr2\",\"gov3\":\"$addr3\"}" $BOOTSTRAP_CONFIG` && echo -E "${contents}" > "$BOOTSTRAP_CONFIG"
+        fi
+
+
+        if [[ -n "${ENDORSED_UI}" ]]; then
+            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
+            cp "$resolved_config" "$MODIFIED_BOOTSTRAP_PATH"
+            export BOOTSTRAP_CONFIG="$MODIFIED_BOOTSTRAP_PATH"
+            sed -i "s/bafybeidvpbtlgefi3ptuqzr2fwfyfjqfj6onmye63ij7qkrb4yjxekdh3e/$ENDORSED_UI/" $MODIFIED_BOOTSTRAP_PATH
         fi
     fi
     #agd firstboot
