@@ -443,7 +443,7 @@ privateapp.listen(privateport, () => {
 faucetapp.get('/', (req, res) => {
   const clientText = !AG0_MODE
     ? `<input type="radio" id="client" name="command" value="client">
-<label for="client">send IST and provision smart wallet</label>
+<label for="client">send IST and provision </label>
 <select name="clientType">
 <option value="SMART_WALLET">smart wallet</option>
 <option value="REMOTE_WALLET">ag-solo</option>
