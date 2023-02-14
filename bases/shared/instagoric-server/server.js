@@ -14,7 +14,9 @@ const { details: X } = globalThis.assert;
 
 const CLIENT_AMOUNT =
   process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
-const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT || '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
+const DELEGATE_AMOUNT =
+  process.env.DELEGATE_AMOUNT ||
+  '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const FAUCET_KEYNAME =
   process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
@@ -441,7 +443,7 @@ privateapp.listen(privateport, () => {
 faucetapp.get('/', (req, res) => {
   const clientText = !AG0_MODE
     ? `<input type="radio" id="client" name="command" value="client">
-<label for="client">client</label>
+<label for="client">send IST and provision smart wallet</label>
 <select name="clientType">
 <option value="SMART_WALLET">smart wallet</option>
 <option value="REMOTE_WALLET">ag-solo</option>
@@ -452,8 +454,8 @@ faucetapp.get('/', (req, res) => {
     `<html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
 <form action="/go" method="post">
 <label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
-Request: <input type="radio" id="delegate" name="command" value="delegate">
-<label for="delegate">delegate</label> 
+Request: <input type="radio" id="delegate" name="command" value="delegate" checked="checked">
+<label for="delegate">send BLD/IBC toy tokens</label> 
 ${clientText}
 <input type="submit" />
 </form>
