@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: node
-  annotations:
-    ad.datadoghq.com/node.logs: '[{"source":"node","service":"instagoric"}]'
 spec:
   podManagementPolicy: "Parallel"
   selector:
@@ -17,6 +15,18 @@ spec:
     metadata:
       labels:
         app: node
+      annotations:
+        ad.datadoghq.com/log-app.logs: |
+          [{"source": "agd", "service":"agd"}]
+        ad.datadoghq.com/log-slog.logs: |
+          [{"source": "slog", "service":"agd"}]
+        ad.datadoghq.com/log-otel.logs: |
+          [{"source": "otel", "service":"instagoric"}]
+        ad.datadoghq.com/log-server.logs: |
+          [{"source": "server", "service":"instagoric"}]
+        ad.datadoghq.com/node.logs: |
+          [{"source": "entrypoint", "service":"instagoric"}]
+
     spec:
       terminationGracePeriodSeconds: 10
       serviceAccountName: opentracing-agent
@@ -326,6 +336,70 @@ spec:
         #       cpu: 250m
         #       ephemeral-storage: 1Gi
         #       memory: 1Gi
+        - name: log-app
+          image: busybox:latest
+          args: [/bin/sh, -c, 'tail -n 10 -F /state/app.log']
+          volumeMounts:
+          - name: state
+            mountPath: /state
+            readOnly: true
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+        - name: log-slog
+          image: busybox:latest
+          args: [/bin/sh, -c, 'tail -n 10 -F /state/slogfile_current.json']
+          volumeMounts:
+          - name: state
+            mountPath: /state
+            readOnly: true
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+        - name: log-otel
+          image: busybox:latest
+          args: [/bin/sh, -c, 'tail -n 10 -F /state/otel.log']
+          volumeMounts:
+          - name: state
+            mountPath: /state
+            readOnly: true
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+        - name: log-server
+          image: busybox:latest
+          args: [/bin/sh, -c, 'tail -n 10 -F /state/server.log']
+          volumeMounts:
+          - name: state
+            mountPath: /state
+            readOnly: true
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
       volumes:
         - name: otel-config
           configMap:

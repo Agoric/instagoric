@@ -31,6 +31,8 @@ mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
+ln -sf "$SLOGFILE" /state/slogfile_current.json
+
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
         echo "agd";
@@ -310,7 +312,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start 2>&1 | tee -a /state/server.log
+        yarn start >> /state/server.log 2>&1 
         sleep 1
       done
     )
@@ -324,9 +326,9 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@ 2>&1 | tee -a /state/app.log)
+        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ 2>&1 | tee -a /state/app.log
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
     fi
 }
 hang () {
@@ -375,7 +377,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
                 -e "s/@DD_SITE@/${DD_SITE}/" \
                 "$HOME/instagoric-otel-config.yaml"
-            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG"  2>&1 | tee -a /state/otel.log) &
+            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> /state/otel.log  2>&1) &
     fi
 fi
 
@@ -661,7 +663,7 @@ case "$ROLE" in
             ( sleep 60 && run_tasks ) &
         fi
 
-        ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 2>&1 | tee -a /state/agsolo.log
+        ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 >> /state/agsolo.log 2>&1 
         ;;
     "seed")
         if [[ $firstboot == "true" ]]; then
