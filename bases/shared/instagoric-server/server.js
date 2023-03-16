@@ -239,7 +239,7 @@ Chain: ${chainId}${
       : ''
   }
 Revision: ${revision}
-Docker Tag: agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
+Docker Tag: gchr.io/agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -278,7 +278,7 @@ const dockerComposeYaml = (dockertag, netname, netdomain) => `\
 version: "2.2"
 services:
   ag-solo:
-    image: agoric/agoric-sdk:\${SDK_TAG:-${dockertag}}
+    image: ghcr.io/agoric/agoric-sdk:\${SDK_TAG:-${dockertag}}
     ports:
       - "\${HOST_PORT:-8000}:\${PORT:-8000}"
     volumes:

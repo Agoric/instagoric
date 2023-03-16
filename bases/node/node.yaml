@@ -32,7 +32,7 @@ spec:
       serviceAccountName: opentracing-agent
       containers:
         - name: node
-          image: agoric/agoric-sdk
+          image: ghcr.io/agoric/agoric-sdk
           command: ["/bin/bash"]
           securityContext:
             capabilities:

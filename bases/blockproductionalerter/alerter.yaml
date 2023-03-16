@@ -15,7 +15,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: blockproductionalerter
-          image: agoric/agoric-sdk
+          image: ghcr.io/agoric/agoric-sdk
           command: ["/bin/bash"]
           args: ["/entrypoint/entrypoint.sh"]
           resources:
