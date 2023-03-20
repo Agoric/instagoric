@@ -17,7 +17,7 @@ spec:
       terminationGracePeriodSeconds: 10
       containers:
         - name: explorer
-          image: "agoric/pingpub:20220825"
+          image: "ghcr.io/arirubinstein/explorer:20230320193238-3fc64c-linux_amd64"
           command: ["/bin/sh"]
           args: ["-x", "/entrypoint/entrypoint.sh"]
           env:

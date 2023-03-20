@@ -239,7 +239,7 @@ Chain: ${chainId}${
       : ''
   }
 Revision: ${revision}
-Docker Tag: gchr.io/agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
+Docker Tag: ghcr.io/agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
