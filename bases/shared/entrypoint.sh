@@ -549,6 +549,7 @@ else
         sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 1000/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-keep-recent[[:space:]]*=.*/snapshot-keep-recent = 10/}' "$AGORIC_HOME/config/app.toml"
 
+        sed -i.bak 's/^allow_duplicate_ip =.*/allow_duplicate_ip = true/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak 's/^prometheus = false/prometheus = true/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak 's/^addr_book_strict = true/addr_book_strict = false/' "$AGORIC_HOME/config/config.toml"
         sed -i.bak 's/^max_num_inbound_peers =.*/max_num_inbound_peers = 150/' "$AGORIC_HOME/config/config.toml"
