@@ -687,6 +687,8 @@ case "$ROLE" in
         external_address=$(get_ips seed-ext)
         sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
 
+        # Must not run state-sync unless we have enough non-pruned state for it.
+        sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
         start_chain --pruning everything
         ;;
     *)
