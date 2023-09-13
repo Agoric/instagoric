@@ -5,6 +5,7 @@ metadata:
   name: validator-primary
 spec:
   type: ClusterIP
+  publishNotReadyAddresses: true
   selector:
     app: validator-primary
   ports:

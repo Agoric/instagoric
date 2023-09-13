@@ -292,6 +292,29 @@ spec:
               name: prom
             - containerPort: 1317
               name: api
+          # Can we somehow detect errors that are recoverable by restarting the node?
+          # My feeling is that the only one of these would be if the daemon exits, which
+          # is already handled by normal container restarts.
+          # startupProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: rpc
+          #   failureThreshold: 120
+          #   periodSeconds: 10
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health
+          #     port: rpc
+          #   failureThreshold: 3
+          #   periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - agd status | jq '.SyncInfo.catching_up' | grep false
+            initialDelaySeconds: 10
+            periodSeconds: 10
           volumeMounts:
             - name: state
               mountPath: /state

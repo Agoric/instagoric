@@ -5,6 +5,7 @@ metadata:
   name: seed
 spec:
   type: ClusterIP
+  publishNotReadyAddresses: true
   selector:
     app: seed
   ports:
