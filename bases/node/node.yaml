@@ -292,6 +292,18 @@ spec:
               name: prom
             - containerPort: 1317
               name: api
+          startupProbe:
+            httpGet:
+              path: /health
+              port: rpc
+            failureThreshold: 100
+            periodSeconds: 6
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: rpc
+            failureThreshold: 15
+            periodSeconds: 6
           volumeMounts:
             - name: state
               mountPath: /state
