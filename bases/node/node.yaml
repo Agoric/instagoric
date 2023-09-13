@@ -296,14 +296,22 @@ spec:
             httpGet:
               path: /health
               port: rpc
-            failureThreshold: 100
-            periodSeconds: 6
+            failureThreshold: 120
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - agd status | jq '.SyncInfo.catching_up' | grep false
+            initialDelaySeconds: 10
+            periodSeconds: 10
           livenessProbe:
             httpGet:
               path: /health
               port: rpc
-            failureThreshold: 15
-            periodSeconds: 6
+            failureThreshold: 3
+            periodSeconds: 10
           volumeMounts:
             - name: state
               mountPath: /state
