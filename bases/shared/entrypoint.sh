@@ -700,4 +700,5 @@ esac
 if [ -f "/state/hang" ]; then
     hang
 fi
-hang
+# for debugging:
+# hang
