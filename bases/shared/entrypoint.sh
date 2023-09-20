@@ -33,6 +33,33 @@ echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
 
+
+export MAX_VATS=70
+
+generate_process_metrics_exporter_config() {
+    mkdir -p /config/process-metrics
+    echo "process_names:" > /config/process-metrics/config.yaml
+    for i in $(seq 1 $MAX_VATS); do
+      echo "  - name: \"v$i\""
+      echo "    cmdline:"
+      echo "    - \".* v$i:.*\""
+      echo ""
+    done >> /config/process-metrics/config.yaml
+}
+
+start_process_metrics_exporter () {
+    (
+      while true; do
+        prometheus-process-exporter -config.path /config/process-metrics/config.yaml >> /state/process-exporter.log 2>&1
+        sleep 1
+      done
+    )
+}
+
+generate_process_metrics_exporter_config
+apt-get install -y prometheus-process-exporter
+start_process_metrics_exporter &
+
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
         echo "agd";
