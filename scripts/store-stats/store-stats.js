@@ -35,8 +35,10 @@ const vatstores = [];
 const db = new sqlite3.Database(dbFilePath);
 const getVatstoreStats = async () => {
   for (let id = 1; id <= MAX_VATS; id++) {
-    const query = `SELECT COUNT(*) as keyCount FROM kvStore WHERE key LIKE 'v${id}.vs.%'`;
-    await db.get(query, [], (err, row) => {
+    const query = `SELECT COUNT(*) as keyCount FROM kvStore WHERE key LIKE ?`;
+    const keyPattern = `v${id}.vs.%`;
+
+    db.get(query, [keyPattern], (err, row) => {
       if (err) {
         console.error(err.message);
         return;
@@ -86,7 +88,6 @@ function shutdown() {
 
   exporter.shutdown(() => {
     console.log('Exporter shut down. Exiting...');
-    process.exit(0);
   });
 }
 
