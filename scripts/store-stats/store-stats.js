@@ -15,7 +15,7 @@
 
 import { MeterProvider } from '@opentelemetry/sdk-metrics';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
-import sqlite3 from 'sqlite3';
+import sqlite3 from 'better-sqlite3';
 
 const DB_READ_INTERVAL = 10 * 60 * 1000; // 10 minutes
 const PORT = 9184;
@@ -32,21 +32,17 @@ const dbReadInterval = parseInt(process.argv[3], 10) || DB_READ_INTERVAL;
 
 const vatstores = [];
 
-const db = new sqlite3.Database(dbFilePath);
-const getVatstoreStats = async () => {
+const db = sqlite3(dbFilePath);
+const getVatstoreStats = () => {
   for (let id = 1; id <= MAX_VATS; id++) {
-    const query = `SELECT COUNT(*) as keyCount FROM kvStore WHERE key LIKE ?`;
+    const query = db.prepare('SELECT COUNT(*) as keyCount FROM kvStore WHERE key LIKE ?');
+    query.pluck(true);
     const keyPattern = `v${id}.vs.%`;
 
-    db.get(query, [keyPattern], (err, row) => {
-      if (err) {
-        console.error(err.message);
-        return;
-      }
-      if (row.keyCount > 0) {
-        vatstores.push({ count: row.keyCount, vatId: `v${id}` });
-      }
-    });
+    const count = query.get(keyPattern);
+    if (count > 0) {
+      vatstores.push({ count, vatId: `v${id}` });
+    }
   }
 };
 
@@ -77,22 +73,14 @@ observableCounter.addCallback(observableResult => {
   }
 });
 
+setInterval(getVatstoreStats, dbReadInterval);
+
 function shutdown() {
   console.log('Received shutdown signal. Shutting down gracefully...');
-
-  db.close(err => {
-    if (err) {
-      console.error('Error closing the database:', err.message);
-    }
-  });
-
-  exporter.shutdown(() => {
-    console.log('Exporter shut down. Exiting...');
-  });
+  db.close();
+  exporter.shutdown();
+  process.exit(0);
 }
 
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
-
-getVatstoreStats();
-setInterval(getVatstoreStats, dbReadInterval);
