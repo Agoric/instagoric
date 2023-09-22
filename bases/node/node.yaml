@@ -326,6 +326,8 @@ spec:
               mountPath: /config/otel
             - name: server
               mountPath: /config/server
+            - name: store-stats
+              mountPath: /config/store-stats
             - name: ramdisk
               mountPath: /tmp
           resources:
@@ -437,6 +439,9 @@ spec:
         - name: server
           configMap:
             name: server
+        - name: store-stats
+          configMap:
+            name: store-stats
         - name: ramdisk
           emptyDir:
             medium: Memory

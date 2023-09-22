@@ -16,11 +16,13 @@
 import { MeterProvider } from '@opentelemetry/sdk-metrics';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import sqlite3 from 'better-sqlite3';
+import fs from 'fs';
 
 const DB_READ_INTERVAL = 10 * 60 * 1000; // 10 minutes
 const PORT = 9184;
 const ENDPOINT = '/metrics';
 const MAX_VATS = 80;
+const RETRY_INTERVAL = 1 * 60 * 1000;
 
 const dbFilePath = process.argv[2];
 if (!dbFilePath) {
@@ -32,8 +34,25 @@ const dbReadInterval = parseInt(process.argv[3], 10) || DB_READ_INTERVAL;
 
 const vatstores = [];
 
-const db = sqlite3(dbFilePath);
-const getVatstoreStats = () => {
+function openDatabase(filePath, callback) {
+  if (fs.existsSync(filePath)) {
+    const db = new sqlite3(filePath);
+    callback(null, db);
+  } else {
+    console.log(`Database file not found at ${filePath}. Retrying in ${RETRY_INTERVAL / 1000} seconds...`);
+    setTimeout(() => openDatabase(filePath, callback), RETRY_INTERVAL);
+  }
+}
+
+openDatabase(dbFilePath, (err, db) => {
+  if (err) {
+    console.error(`Error opening database: ${err.message}`);
+    return;
+  }
+  setInterval(() => getVatstoreStats(db), dbReadInterval);
+});
+
+const getVatstoreStats = (db) => {
   for (let id = 1; id <= MAX_VATS; id++) {
     const query = db.prepare('SELECT COUNT(*) as keyCount FROM kvStore WHERE key LIKE ?');
     query.pluck(true);
@@ -72,8 +91,6 @@ observableCounter.addCallback(observableResult => {
     observableResult.observe(vat.count, { vatId: vat.vatId });
   }
 });
-
-setInterval(getVatstoreStats, dbReadInterval);
 
 function shutdown() {
   console.log('Received shutdown signal. Shutting down gracefully...');

@@ -16,6 +16,7 @@ export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
+export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
 mkdir -p $AGORIC_HOME
 if [[ -z "$AG0_MODE" ]]; then 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
@@ -51,7 +52,7 @@ start_process_metrics_exporter () {
     (
       while true; do
         prometheus-process-exporter -config.path /config/process-metrics/config.yaml >> /state/process-exporter.log 2>&1
-        sleep 1
+        sleep 120
       done
     )
 }
@@ -59,6 +60,26 @@ start_process_metrics_exporter () {
 generate_process_metrics_exporter_config
 apt-get install -y prometheus-process-exporter
 start_process_metrics_exporter &
+
+install_store_stats_exporter() {
+    mkdir -p $HOME/store-stats
+    cp /config/store-stats/* $HOME/store-stats
+    cd $HOME/store-stats
+    yarn install
+}
+
+start_store_metrics_exporter () {
+    (
+      cd $HOME/store-stats
+      while true; do
+        node store-stats.js $SWINGSTORE >> /state/store-stats-exporter.log 2>&1
+        sleep 120
+      done
+    )
+}
+
+install_store_stats_exporter
+start_store_metrics_exporter &
 
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
