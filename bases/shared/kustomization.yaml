@@ -20,3 +20,7 @@ configMapGenerator:
       - instagoric-server/server.js
       - instagoric-server/package.json
       - instagoric-server/yarn.lock
+  - name: store-stats
+    files:
+      - tools/store-stats/package.json
+      - tools/store-stats/store-stats.js
