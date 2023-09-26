@@ -662,7 +662,7 @@ else
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json 
 
         else
-            if [[ ! $ROLE == fork* ]]; then
+            if [[ $ROLE != fork* ]] && [[ $ROLE != "follower" ]]; then
                 primary_genesis > $AGORIC_HOME/config/genesis.json
             fi
         fi
@@ -837,6 +837,26 @@ case "$ROLE" in
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric2
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        start_chain
+        ;;
+    "follower")
+        if [[ ! -f "$AGORIC_HOME/agoric_11796108.tar.lz4" ]]; then
+            cd /state/
+            apt update
+            apt install lz4
+            wget -O agoric_11796108.tar.lz4 https://storage.googleapis.com/agoric-snapshots-public/agoric_11796108-polkachu/agoric_11796108.tar.lz4 --inet4-only
+            lz4 -c -d agoric_11796108.tar.lz4  | tar -x -C $AGORIC_HOME
+            wget -O addrbook.json https://storage.googleapis.com/agoric-snapshots-public/agoric_11796108-polkachu/addrbook.json
+            cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
+        fi
+
+        if [[ -z "$AG0_MODE" ]]; then 
+
+            if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+            fi
+            export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        fi
         start_chain
         ;;
     *)
