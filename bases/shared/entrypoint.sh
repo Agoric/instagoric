@@ -711,8 +711,8 @@ case "$ROLE" in
             cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
         fi
         
-        # external_address=$(get_ips validator-primary-ext)
-        # sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
+        external_address=$(get_ips validator-primary-ext)
+        sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ -z "$AG0_MODE" ]]; then 
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
                 export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
@@ -747,6 +747,7 @@ case "$ROLE" in
             sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$primary\"/" "$AGORIC_HOME/config/config.toml"
             sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
         fi
+        sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &
         fi
