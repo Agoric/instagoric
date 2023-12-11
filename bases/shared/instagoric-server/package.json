@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@agoric/notifier": "^0.4.0",
-    "@endo/init": "^0.5.41",
+    "@endo/init": "^0.5.60",
     "@endo/promise-kit": "^0.2.41",
     "express": "^4.17.1",
     "prettier": "^2.6.2",
