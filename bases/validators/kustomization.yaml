@@ -3,7 +3,6 @@ kind: Kustomization
 
 resources:
   - ../node
-  - ./service.yaml
 
 patches:
   - target:

@@ -5,6 +5,7 @@ namespace: instagoric
 resources:
   - ../../bases/shared
   - ../../bases/primaryvalidator
+  - ../../bases/rpcnodes
   - ../../bases/validators
   - ../../bases/seed
   - ../../bases/ag-solo-manual

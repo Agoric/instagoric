@@ -6,6 +6,7 @@ resources:
   - ../../bases/shared
   - ../../bases/primaryvalidator
   - ../../bases/validators
+  - ../../bases/rpcnodes
   - ../../bases/seed
   - ../../bases/explorer
 
