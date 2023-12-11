@@ -824,18 +824,12 @@ case "$ROLE" in
         fork_setup agoric1
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
-        
-        # hang to debug if chain stops for any reason instead of restarting pods forever
-        hang
         ;;
     "fork2")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric2
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
-
-        # hang to debug if chain stops for any reason instead of restarting pods forever
-        hang
         ;;
     *)
         echo "unknown role"
