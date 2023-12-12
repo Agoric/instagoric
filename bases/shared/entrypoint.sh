@@ -28,8 +28,8 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=12838005
-export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainnet-tinkered-exports"
+export MAINFORK_HEIGHT=12838002
+export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
 # Kubernetes API constants
 API_ENDPOINT=https://kubernetes.default.svc
