@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../validators
+
+patches:
+  - target:
+      kind: StatefulSet
+      name: node
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+      - op: add
+        path: /spec/template/spec/containers/0/env/-
+        value: 
+          name: ROLE
+          value: fork2
+      - op: add
+        path: /metadata/labels
+        value: 
+          app: fork2
+      - op: replace
+        path: /spec/selector/matchLabels/app
+        value: fork2
+      - op: replace
+        path: /metadata/name
+        value: fork2
+      - op: add
+        path: /metadata/labels
+        value: 
+          app: fork2
+      - op: add
+        path: /spec/template/metadata/labels/app
+        value: fork2
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 24Gi
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: 24Gi

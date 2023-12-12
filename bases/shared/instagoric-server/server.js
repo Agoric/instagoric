@@ -24,6 +24,9 @@ const NETNAME = process.env.NETNAME || 'devnet';
 const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
 const agBinary = AG0_MODE ? 'ag0' : 'agd';
+const podname = process.env.POD_NAME || 'validator-primary';
+const INCLUDE_SEED =  process.env.SEED_ENABLE || 'yes';
+const NODE_ID = process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
 
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
@@ -143,14 +146,22 @@ const getNetworkConfig = async () => {
   ap.peers[0] = ap.peers[0].replace(
     'validator-primary.instagoric.svc.cluster.local',
     svc.get('validator-primary-ext') ||
-      'validator-primary.instagoric.svc.cluster.local',
+      `${podname}.instagoric.svc.cluster.local`,
+  );
+  ap.peers[0] = ap.peers[0].replace(
+    'fb86a0993c694c981a28fa1ebd1fd692f345348b', `${NODE_ID}`,
   );
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
   ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
-  ap.seeds[0] = ap.seeds[0].replace(
-    'seed.instagoric.svc.cluster.local',
-    svc.get('seed-ext') || 'seed.instagoric.svc.cluster.local',
-  );
+  if (INCLUDE_SEED==='yes') {
+    ap.seeds[0] = ap.seeds[0].replace(
+      'seed.instagoric.svc.cluster.local',
+      svc.get('seed-ext') || 'seed.instagoric.svc.cluster.local',
+    );
+  } else {
+    ap.seeds = [];
+  }
+
   return JSON.stringify(ap);
 };
 class DataCache {
@@ -501,7 +512,7 @@ if (FAKE) {
   dockerImage = 'asdf:unknown';
 } else {
   const statefulSet = await makeKubernetesRequest(
-    `/apis/apps/v1/namespaces/${namespace}/statefulsets/validator-primary`,
+    `/apis/apps/v1/namespaces/${namespace}/statefulsets/${podname}`,
   );
   dockerImage = statefulSet.spec.template.spec.containers[0].image;
 }

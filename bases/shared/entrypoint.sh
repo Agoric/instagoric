@@ -28,6 +28,17 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
+export MAINFORK_HEIGHT=12838002
+export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
+
+# Kubernetes API constants
+API_ENDPOINT=https://kubernetes.default.svc
+TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
+CA_PATH=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+NAMESPACE_PATH=/var/run/secrets/kubernetes.io/serviceaccount/namespace
+NAMESPACE=$(cat $NAMESPACE_PATH)
+TOKEN=$(cat $TOKEN_PATH)
+
 mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
@@ -400,6 +411,70 @@ get_ips() {
     done
 }
 
+get_pod_ip() {
+    # Define your variable
+    APP_LABEL_VALUE=$1
+
+    while true; do
+        POD_INFO=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
+        POD_IP=$(echo "$POD_INFO" | jq --arg app_value "$APP_LABEL_VALUE" -r '.items[] | select(.metadata.labels.app == $app_value) .status.podIP')
+    
+        if [[ -z "$POD_IP" ]]; then
+            echo "Couldn't get Pod IP address. Trying again..."
+        else
+            break
+        fi
+        sleep 10
+    done
+
+    echo "$POD_IP"
+}
+
+wait_for_pod() {
+    # Define your variable
+    APP_LABEL_VALUE=$1
+
+    while true; do
+        POD_INFO=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
+        POD_PHASE=$(echo "$POD_INFO" | jq --arg app_value "$APP_LABEL_VALUE" -r '.items[] | select(.metadata.labels.app == $app_value) .status.phase')
+    
+        if [[ "$POD_PHASE" != "Running" ]]; then
+            echo "Pod not running yet. Trying again..."
+        else
+            break
+        fi
+        sleep 10
+    done
+}
+
+fork_setup() {
+    THIS_FORK=$1
+    wait_for_pod "fork1"
+    wait_for_pod "fork2"
+
+    echo "Fetching IP addresses of the two nodes..."
+    FORK1_IP=$(get_pod_ip "fork1")
+    FORK2_IP=$(get_pod_ip "fork2")
+
+    mkdir -p $AGORIC_HOME
+    rm -rf $AGORIC_HOME/*
+
+    if [ ! -f "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
+        apt install -y axel
+        axel --quiet -n 10 -o "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz"
+        axel --quiet -n 10 -o "/state/agoric-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/agoric-$MAINFORK_HEIGHT.tar.gz"
+
+        tar -xzf "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME        
+        tar -xzf "/state/agoric-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
+    fi
+    
+    persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
+    sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
+
+    # For importing a exported state only
+    # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml
+}
+
 ###
 if [[ -z "$AG0_MODE" ]]; then 
     if [[ -z "${ENABLE_TELEMETRY}" ]]; then
@@ -580,7 +655,9 @@ else
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json 
 
         else
-            primary_genesis > $AGORIC_HOME/config/genesis.json
+            if [[ ! $ROLE == fork* ]]; then
+                primary_genesis > $AGORIC_HOME/config/genesis.json
+            fi
         fi
         sed -i.bak 's/^log_level/# log_level/' "$AGORIC_HOME/config/config.toml"
 
@@ -626,10 +703,10 @@ patch_validator_config () {
     fi
 }
 
-(WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
 echo "Firstboot: $firstboot"
 case "$ROLE" in
     "validator-primary")
+        (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
         if [[ $firstboot == "true" ]]; then
             cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
         fi
@@ -654,6 +731,7 @@ case "$ROLE" in
         ;;
 
     "validator")
+        (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
         # wait for network live
         if [[ $firstboot == "true" ]]; then
             add_whale_key "$(get_whale_index)"
@@ -686,6 +764,7 @@ case "$ROLE" in
         start_chain
         ;;
     "ag-solo")
+        (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
         if [[ -n "$AG0_MODE" ]]; then 
             exit 1
         fi
@@ -719,6 +798,7 @@ case "$ROLE" in
         ag-solo setup -v --netconfig=file:///state/network_info.json --webhost=0.0.0.0 >> /state/agsolo.log 2>&1 
         ;;
     "seed")
+        (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
         if [[ $firstboot == "true" ]]; then
             create_self_key
             # wait for network live
@@ -738,6 +818,18 @@ case "$ROLE" in
         # Must not run state-sync unless we have enough non-pruned state for it.
         sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
         start_chain --pruning everything
+        ;;
+    "fork1")
+        (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
+        fork_setup agoric1
+        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
+        ;;
+    "fork2")
+        (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
+        fork_setup agoric2
+        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
         ;;
     *)
         echo "unknown role"

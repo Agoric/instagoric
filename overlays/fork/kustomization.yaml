@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: instagoric
+
+resources:
+  - ../../bases/shared
+  - ../../bases/rpcnodes
+  - ../../bases/fork1
+  - ../../bases/fork2
+  - ../../bases/explorer
