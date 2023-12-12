@@ -413,13 +413,13 @@ get_ips() {
 
 get_pod_ip() {
     # Define your variable
-    APP_LABEL_VALUE=$1
+    app_label_value=$1
 
     while true; do
-        POD_INFO=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
-        POD_IP=$(echo "$POD_INFO" | jq --arg app_value "$APP_LABEL_VALUE" -r '.items[] | select(.metadata.labels.app == $app_value) .status.podIP')
+        pod_info=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
+        pod_ip=$(echo "$pod_info" | jq --arg app_value "$app_label_value" -r '.items[] | select(.metadata.labels.app == $app_value) .status.podIP')
     
-        if [[ -z "$POD_IP" ]]; then
+        if [[ -z "$pod_ip" ]]; then
             echo "Couldn't get Pod IP address. Trying again..."
         else
             break
@@ -427,18 +427,18 @@ get_pod_ip() {
         sleep 10
     done
 
-    echo "$POD_IP"
+    echo "$pod_ip"
 }
 
 wait_for_pod() {
     # Define your variable
-    APP_LABEL_VALUE=$1
+    app_label_value=$1
 
     while true; do
-        POD_INFO=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
-        POD_PHASE=$(echo "$POD_INFO" | jq --arg app_value "$APP_LABEL_VALUE" -r '.items[] | select(.metadata.labels.app == $app_value) .status.phase')
+        pod_info=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
+        pod_phase=$(echo "$pod_info" | jq --arg app_value "$app_label_value" -r '.items[] | select(.metadata.labels.app == $app_value) .status.phase')
     
-        if [[ "$POD_PHASE" != "Running" ]]; then
+        if [[ "$pod_phase" != "Running" ]]; then
             echo "Pod not running yet. Trying again..."
         else
             break
@@ -711,8 +711,8 @@ case "$ROLE" in
             cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
         fi
         
-        # external_address=$(get_ips validator-primary-ext)
-        # sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
+        external_address=$(get_ips validator-primary-ext)
+        sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ -z "$AG0_MODE" ]]; then 
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
                 export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
@@ -747,6 +747,7 @@ case "$ROLE" in
             sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$primary\"/" "$AGORIC_HOME/config/config.toml"
             sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
         fi
+        sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ ! -f "$AGORIC_HOME/registered" ]]; then
             ( wait_till_syncup_and_register ) &
         fi
