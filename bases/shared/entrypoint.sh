@@ -57,6 +57,11 @@ generate_process_metrics_exporter_config() {
       echo "    - \".* v$i:.*\""
       echo ""
     done >> /config/process-metrics/config.yaml
+    echo "" >> /config/process-metrics/config.yaml
+    echo "  - name: \"node\"" >> /config/process-metrics/config.yaml
+    echo "    cmdline:" >> /config/process-metrics/config.yaml
+    echo "    - \".*node.*start.*\"" >> /config/process-metrics/config.yaml
+    echo "" >> /config/process-metrics/config.yaml
 }
 
 start_process_metrics_exporter () {
@@ -456,10 +461,10 @@ fork_setup() {
     FORK1_IP=$(get_pod_ip "fork1")
     FORK2_IP=$(get_pod_ip "fork2")
 
-    mkdir -p $AGORIC_HOME
-    rm -rf $AGORIC_HOME/*
+    if [ ! -f "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
+        mkdir -p $AGORIC_HOME
+        rm -rf $AGORIC_HOME/*
 
-    if [ ! -f "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
         apt install -y axel
         axel --quiet -n 10 -o "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz"
         axel --quiet -n 10 -o "/state/agoric-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/agoric-$MAINFORK_HEIGHT.tar.gz"
@@ -470,6 +475,8 @@ fork_setup() {
     
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
+
+    sed -i 's/^snapshot-interval = 0/snapshot-interval = 500/' $AGORIC_HOME/config/app.toml
 
     # For importing a exported state only
     # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml
@@ -824,13 +831,13 @@ case "$ROLE" in
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric1
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-        start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
+        start_chain
         ;;
     "fork2")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric2
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-        start_chain --x-crisis-skip-assert-invariants --iavl-disable-fastnode false
+        start_chain
         ;;
     *)
         echo "unknown role"
