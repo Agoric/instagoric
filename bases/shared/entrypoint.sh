@@ -476,7 +476,7 @@ fork_setup() {
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
 
-    sed -i "/^snapshot-interval = 0/snapshot-interval = 1000/" $AGORIC_HOME/config/app.toml
+    sed -i 's/^snapshot-interval = 0/snapshot-interval = 500/' $AGORIC_HOME/config/app.toml
 
     # For importing a exported state only
     # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml
