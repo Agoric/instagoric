@@ -31,6 +31,10 @@ export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 export MAINFORK_HEIGHT=12838002
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
+export MAINNET_SNAPSHOT="agoric_12973778.tar.lz4"
+export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
+export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
+
 # Kubernetes API constants
 API_ENDPOINT=https://kubernetes.default.svc
 TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
@@ -662,7 +666,7 @@ else
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json 
 
         else
-            if [[ ! $ROLE == fork* ]]; then
+            if [[ $ROLE != fork* ]] && [[ $ROLE != "follower" ]]; then
                 primary_genesis > $AGORIC_HOME/config/genesis.json
             fi
         fi
@@ -836,6 +840,28 @@ case "$ROLE" in
     "fork2")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric2
+        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
+        start_chain
+        ;;
+    "follower")
+        if [[ ! -f "$AGORIC_HOME/data/agoric/swingstore.sqlite" ]]; then
+            cd /state/
+            if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
+                apt install -y axel
+                axel --quiet -n 10 -o "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT"
+            fi
+            apt update
+            apt install lz4
+
+            lz4 -c -d "$MAINNET_SNAPSHOT"  | tar -x -C $AGORIC_HOME
+            wget -O addrbook.json "$MAINNET_ADDRBOOK_URL"
+            cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
+            # disable rosetta
+            cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
+            mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
+            sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
+        fi
+
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
         ;;
