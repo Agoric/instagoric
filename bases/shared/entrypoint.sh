@@ -859,6 +859,7 @@ case "$ROLE" in
             # disable rosetta
             cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
             mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
+            sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
         fi
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
