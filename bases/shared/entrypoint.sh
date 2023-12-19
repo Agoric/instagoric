@@ -31,6 +31,10 @@ export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 export MAINFORK_HEIGHT=12838002
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
+export MAINNET_SNAPSHOT_URL="https://storage.googleapis.com/agoric-snapshots-public/agoric_11796108-polkachu"
+export MAINNET_SNAPSHOT="agoric_11796108.tar.lz4"
+
+
 # Kubernetes API constants
 API_ENDPOINT=https://kubernetes.default.svc
 TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
@@ -842,26 +846,20 @@ case "$ROLE" in
     "follower")
         if [[ ! -f "$AGORIC_HOME/data/agoric/swingstore.sqlite" ]]; then
             cd /state/
-            if [[ ! -f "/state/agoric_11796108.tar.lz4" ]]; then
-                wget -O agoric_11796108.tar.lz4 https://storage.googleapis.com/agoric-snapshots-public/agoric_11796108-polkachu/agoric_11796108.tar.lz4 --inet4-only
+            if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
+                wget -O "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" --inet4-only
             fi
             apt update
             apt install lz4
-            lz4 -c -d agoric_11796108.tar.lz4  | tar -x -C $AGORIC_HOME
-            wget -O addrbook.json https://storage.googleapis.com/agoric-snapshots-public/agoric_11796108-polkachu/addrbook.json
+            lz4 -c -d "$MAINNET_SNAPSHOT"  | tar -x -C $AGORIC_HOME
+            wget -O addrbook.json "$MAINNET_SNAPSHOT_URL/addrbook.json"
             cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
             # disable rosetta
             cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
             mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
         fi
-
-        if [[ -z "$AG0_MODE" ]]; then 
-
-            if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
-            fi
-            export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-        fi
+        
+        export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
         ;;
     *)
