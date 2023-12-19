@@ -46,7 +46,7 @@ echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 ln -sf "$SLOGFILE" /state/slogfile_current.json
 
 
-export MAX_VATS=70
+export MAX_VATS=150
 
 generate_process_metrics_exporter_config() {
     mkdir -p /config/process-metrics
@@ -58,9 +58,9 @@ generate_process_metrics_exporter_config() {
       echo ""
     done >> /config/process-metrics/config.yaml
     echo "" >> /config/process-metrics/config.yaml
-    echo "  - name: \"node\"" >> /config/process-metrics/config.yaml
+    echo "  - name: \"agd\"" >> /config/process-metrics/config.yaml
     echo "    cmdline:" >> /config/process-metrics/config.yaml
-    echo "    - \".*node.*start.*\"" >> /config/process-metrics/config.yaml
+    echo "    - \".*ag-chain-cosmos.*\"" >> /config/process-metrics/config.yaml
     echo "" >> /config/process-metrics/config.yaml
 }
 
@@ -476,7 +476,7 @@ fork_setup() {
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
 
-    sed -i 's/^snapshot-interval = 0/snapshot-interval = 500/' $AGORIC_HOME/config/app.toml
+    sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
 
     # For importing a exported state only
     # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml

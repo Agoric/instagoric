@@ -338,8 +338,6 @@ spec:
               mountPath: /config/server
             - name: store-stats
               mountPath: /config/store-stats
-            - name: ramdisk
-              mountPath: /tmp
           resources:
             limits:
               cpu: 1000m
@@ -452,9 +450,6 @@ spec:
         - name: store-stats
           configMap:
             name: store-stats
-        - name: ramdisk
-          emptyDir:
-            medium: Memory
   volumeClaimTemplates:
     - metadata:
         name: state
