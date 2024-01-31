@@ -45,7 +45,7 @@ NAMESPACE_PATH=/var/run/secrets/kubernetes.io/serviceaccount/namespace
 NAMESPACE=$(cat $NAMESPACE_PATH)
 TOKEN=$(cat $TOKEN_PATH)
 
-mkdir -p /state/tmp
+mkdir -p "${TMPDIR:-/tmp}"
 mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
