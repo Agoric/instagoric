@@ -35,6 +35,8 @@ export MAINNET_SNAPSHOT="agoric_12973778.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
 
+export TMPDIR=/state/tmp
+
 # Kubernetes API constants
 API_ENDPOINT=https://kubernetes.default.svc
 TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
@@ -43,6 +45,7 @@ NAMESPACE_PATH=/var/run/secrets/kubernetes.io/serviceaccount/namespace
 NAMESPACE=$(cat $NAMESPACE_PATH)
 TOKEN=$(cat $TOKEN_PATH)
 
+mkdir -p /state/tmp
 mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
