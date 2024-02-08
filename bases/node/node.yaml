@@ -341,11 +341,11 @@ spec:
           resources:
             limits:
               cpu: 1000m
-              ephemeral-storage: 5Gi
+              ephemeral-storage: 15Gi
               memory: 8Gi
             requests:
               cpu: 100m
-              ephemeral-storage: 5Gi
+              ephemeral-storage: 15Gi
               memory: 2Gi
         # - name: grpc-hc
         #   image: docker.io/salrashid123/grpc_health_proxy:1.0.0
