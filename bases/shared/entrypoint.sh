@@ -28,13 +28,12 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=12838002
+export MAINFORK_HEIGHT=13512995
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
 export MAINNET_SNAPSHOT="agoric_12973778.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
-
 export TMPDIR=/state/tmp
 
 # Kubernetes API constants
@@ -838,13 +837,13 @@ case "$ROLE" in
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric1
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-        start_chain
+        start_chain --iavl-disable-fastnode false
         ;;
     "fork2")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric2
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-        start_chain
+        start_chain --iavl-disable-fastnode false
         ;;
     "follower")
         if [[ ! -f "$AGORIC_HOME/data/agoric/swingstore.sqlite" ]]; then
