@@ -401,10 +401,22 @@ start_chain () {
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
     fi
 }
-hang () {
-    while true; do sleep 30; done
-}
 
+hang() {
+  hangfile="$1"
+  if [ -n "$hangfile" ] && [ -f "$hangfile" ]; then
+    echo 1>&2 "$hangfile exists, keeping entrypoint alive..."
+  fi
+  while [ -z "$hangfile" ] || [ -f "$hangfile" ]; do
+    sleep 600 &
+    pid=$!
+
+    echo 1>&2 "still hanging: to exit kill $pid"
+    wait $pid
+    slept=$?
+    [ $slept -eq 0 ] || break
+  done
+}
 
 get_ips() {
     servicename=$1
@@ -873,8 +885,9 @@ case "$ROLE" in
         ;;
 esac
 
-if [ -f "/state/hang" ]; then
-    hang
-fi
-# for debugging:
-# hang
+status=$?
+
+hang /state/hang
+
+echo "exiting entrypoint with status=$status"
+exit "$status"
