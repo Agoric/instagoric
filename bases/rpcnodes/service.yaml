@@ -1,7 +1,7 @@
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
-  name: stage-grpc-backendconfig
+  name: grpc-backendconfig
 spec:
   healthCheck:
     port: 8080
@@ -11,11 +11,21 @@ spec:
 apiVersion: cloud.google.com/v1
 kind: BackendConfig
 metadata:
-  name: stage-api-backendconfig
+  name: api-backendconfig
 spec:
   healthCheck:
     port: 1317
     requestPath: /node_info
+    type: HTTP
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: rpc-backendconfig
+spec:
+  healthCheck:
+    port: 26657
+    requestPath: /abci_info
     type: HTTP
 ---
 apiVersion: v1
@@ -24,7 +34,7 @@ metadata:
   name: rpcnodes
   annotations:
     cloud.google.com/app-protocols: '{"grpc":"HTTP2"}'
-    cloud.google.com/backend-config: '{"ports":{"grpc":"stage-grpc-backendconfig","api":"stage-api-backendconfig"}}'
+    cloud.google.com/backend-config: '{"ports":{"grpc":"grpc-backendconfig","api":"api-backendconfig","rpc":"rpc-backendconfig"}}'
     cloud.google.com/neg: '{"ingress":true,"exposed_ports":{"26657":{},"1317":{},"9090":{},"8001":{}}}'
 spec:
   type: ClusterIP

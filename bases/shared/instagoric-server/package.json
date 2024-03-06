@@ -6,7 +6,7 @@
   "scripts": {
     "build": "exit 0",
     "test": "exit 0",
-    "start": "NAMESPACE=instagoric node server.js",
+    "start": "NAMESPACE=${NAMESPACE-instagoric} node server.js",
     "test:c8": "c8 $C8_OPTIONS ava --config=ava-nesm.config.js",
     "test:xs": "exit 0",
     "lint-fix": "yarn lint:eslint --fix",

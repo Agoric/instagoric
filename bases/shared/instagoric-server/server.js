@@ -146,7 +146,7 @@ const getNetworkConfig = async () => {
   ap.peers[0] = ap.peers[0].replace(
     'validator-primary.instagoric.svc.cluster.local',
     svc.get('validator-primary-ext') ||
-      `${podname}.instagoric.svc.cluster.local`,
+      `${podname}.${namespace}.svc.cluster.local`,
   );
   ap.peers[0] = ap.peers[0].replace(
     'fb86a0993c694c981a28fa1ebd1fd692f345348b', `${NODE_ID}`,
@@ -156,7 +156,7 @@ const getNetworkConfig = async () => {
   if (INCLUDE_SEED==='yes') {
     ap.seeds[0] = ap.seeds[0].replace(
       'seed.instagoric.svc.cluster.local',
-      svc.get('seed-ext') || 'seed.instagoric.svc.cluster.local',
+      svc.get('seed-ext') || `seed.${namespace}.svc.cluster.local`,
     );
   } else {
     ap.seeds = [];
