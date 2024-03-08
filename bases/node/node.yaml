@@ -101,6 +101,12 @@ spec:
                   name: instagoric-release
                   key: BLOCK_COMPUTE_LIMIT
                   optional: true
+            - name: SDK_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: SDK_PATH
+                  optional: true
             - name: GC_INTERVAL
               valueFrom:
                 configMapKeyRef:

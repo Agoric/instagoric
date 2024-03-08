@@ -27,7 +27,6 @@ const agBinary = AG0_MODE ? 'ag0' : 'agd';
 const podname = process.env.POD_NAME || 'validator-primary';
 const INCLUDE_SEED =  process.env.SEED_ENABLE || 'yes';
 const NODE_ID = process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
-
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
   console.log('FAKE MODE');
@@ -60,18 +59,22 @@ const namespace =
     flag: 'r',
   });
 
-const revision =
-  process.env.AG0_MODE === 'true'
-    ? 'ag0'
-    : fs
-        .readFileSync(
-          '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
-          {
-            encoding: 'utf8',
-            flag: 'r',
-          },
-        )
-        .trim();
+let revision = 'undefined';
+if (process.env.AG0_MODE === 'true') {
+  revision = 'ag0';
+} else {
+  try {
+    revision = fs.readFileSync(
+      `${process.env.SDK_PATH}/packages/solo/public/git-revision.txt`,
+      {
+        encoding: 'utf8',
+        flag: 'r',
+      }
+    ).trim();
+  } catch (error) {
+    // ignore
+  }
+}
 
 /**
  * @param {string} relativeUrl

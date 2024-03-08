@@ -15,11 +15,12 @@ export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
-export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
+export SDK_PATH=${SDK_PATH:-/usr/src/agoric-sdk}
+export MODIFIED_BOOTSTRAP_PATH="${SDK_PATH}/packages/vats/modified-bootstrap.json"
 export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
 mkdir -p $AGORIC_HOME
 if [[ -z "$AG0_MODE" ]]; then 
-version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
+version=$(cat ${SDK_PATH}/packages/solo/public/git-revision.txt | tr '\n' ' ' )
 else
 version=ag0
 fi
@@ -35,6 +36,7 @@ export MAINNET_SNAPSHOT="agoric_12973778.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
 export TMPDIR=/state/tmp
+export PATH=$PATH:$SDK_PATH/bin
 
 # Kubernetes API constants
 API_ENDPOINT=https://kubernetes.default.svc
@@ -244,7 +246,7 @@ ensure_solo_provisioned () {
 }
 
 run_tasks () {
-    cd /usr/src/agoric-sdk || exit
+    cd ${SDK_PATH} || exit
     mkdir ag-solo-tasks
     cd ag-solo-tasks || exit
     cp /tasks/* .
@@ -371,6 +373,7 @@ ensure_balance () {
         else
             sleep $(( ( RANDOM % 50 ) + 10 ))
         fi
+        sleep 10
     done
 }
 start_helper () {
@@ -396,7 +399,7 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
+        $(ag_binary) $extra --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
     fi
@@ -558,26 +561,26 @@ if [[ $ROLE == "ag-solo" ]]; then
 else
     if [[ -z "$AG0_MODE" ]]; then 
         if [[ -n "${GC_INTERVAL}" ]]; then      
-            jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > $BOOTSTRAP_CONFIG
+            jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL ${SDK_PATH}/packages/vats/decentral-core-config.json > $BOOTSTRAP_CONFIG
             export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
         fi
 
 
         if [[ -n "${ECON_SOLO_SEED}" ]]; then
             econ_addr=$(echo "$ECON_SOLO_SEED" | $(ag_binary) keys add econ --dry-run --recover --output json | jq -r .address)
-    #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json > /usr/src/agoric-sdk/node_modules/\@agoric/vats/decentral-core-config-modified.json
+    #        jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL ${SDK_PATH}/packages/vats/decentral-core-config.json > ${SDK_PATH}/node_modules/\@agoric/vats/decentral-core-config-modified.json
             sed "s/@FIRST_SOLO_ADDRESS@/$econ_addr/g" /config/network/economy-proposals.json > /tmp/formatted_proposals.json
-            source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config.json"
-            if [[ -f /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json ]]; then
-                source_bootstrap="/usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json"
+            source_bootstrap="${SDK_PATH}/packages/vats/decentral-core-config.json"
+            if [[ -f ${SDK_PATH}/packages/vats/decentral-core-config-modified.json ]]; then
+                source_bootstrap="${SDK_PATH}/packages/vats/decentral-core-config-modified.json"
             fi
 
-            contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > /usr/src/agoric-sdk/packages/vats/decentral-core-config-modified.json
+            contents="$(jq -s '.[0] + {coreProposals:.[1]}' $source_bootstrap /tmp/formatted_proposals.json)" && echo -E "${contents}" > ${SDK_PATH}/packages/vats/decentral-core-config-modified.json
             export BOOTSTRAP_CONFIG="@agoric/vats/decentral-core-config-modified.json"
         fi
         
         if [[ -n "${PSM_GOV_A}" ]]; then
-            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
+            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_${SDK_PATH}/packages_g')
             cp "$resolved_config" "$MODIFIED_BOOTSTRAP_PATH"
             export BOOTSTRAP_CONFIG="$MODIFIED_BOOTSTRAP_PATH"
             addr1=$(echo "$PSM_GOV_A" | agd keys add econ --dry-run --recover --output json | jq -r .address)
@@ -589,7 +592,7 @@ else
 
 
         if [[ -n "${ENDORSED_UI}" ]]; then
-            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
+            resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_${SDK_PATH}/packages_g')
             cp "$resolved_config" "$MODIFIED_BOOTSTRAP_PATH"
             export BOOTSTRAP_CONFIG="$MODIFIED_BOOTSTRAP_PATH"
             sed -i "s/bafybeidvpbtlgefi3ptuqzr2fwfyfjqfj6onmye63ij7qkrb4yjxekdh3e/$ENDORSED_UI/" $MODIFIED_BOOTSTRAP_PATH
@@ -709,6 +712,7 @@ else
         sed -i.bak '/^\[api]/,/^\[/{s/^swagger[[:space:]]*=.*/swagger = false/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[api]/,/^\[/{s/^address[[:space:]]*=.*/address = "tcp:\/\/0.0.0.0:1317"/}' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[api]/,/^\[/{s/^max-open-connections[[:space:]]*=.*/max-open-connections = 1000/}' "$AGORIC_HOME/config/app.toml"
+        sed -i.bak 's/^rpc-max-body-bytes =.*/rpc-max-body-bytes = \"15000000\"/' "$AGORIC_HOME/config/app.toml"
         sed -i.bak '/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26657"/}' "$AGORIC_HOME/config/config.toml"
     fi
 fi
