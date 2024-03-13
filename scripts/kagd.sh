@@ -47,7 +47,7 @@ if [[ "$1" == "--all" ]]; then
   shift
   targets=
   for label in validator validator-primary; do
-    targets="$targets $(kubectl -n instagoric get -l app=$label pods -o jsonpath='{.items[*].metadata.name}')"
+    targets="$targets $(kubectl get -l app=$label pods -o jsonpath='{.items[*].metadata.name}')"
   done
 else
   targets="validator-primary-0"
@@ -66,5 +66,5 @@ case $1 in
 esac
 
 for v in $targets; do
-  kubectl -n instagoric exec "$v" -- agd --home="/state/$chainid" ${1+"$@"}
+  kubectl exec "$v" -- agd --home="/state/$chainid" ${1+"$@"}
 done

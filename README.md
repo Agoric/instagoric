@@ -8,7 +8,7 @@ Optionally specify the Agoric SDK image tag.
 
 To deploy:
 
-1. kubectl apply -k .
+1. kubectl -n instagoric apply -k .
 
 When finished:
 
