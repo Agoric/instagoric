@@ -18,6 +18,7 @@ const DELEGATE_AMOUNT =
   process.env.DELEGATE_AMOUNT ||
   '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
+const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAUCET_KEYNAME =
   process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
 const NETNAME = process.env.NETNAME || 'devnet';
@@ -250,7 +251,7 @@ Chain: ${chainId}${
       : ''
   }
 Revision: ${revision}
-Docker Tag: ghcr.io/agoric/agoric-sdk:${DOCKERTAG || dockerImage.split(':')[1]}
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]}
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -285,11 +286,11 @@ publicapp.get('/metrics-config', async (req, res) => {
   res.send(result);
 });
 
-const dockerComposeYaml = (dockertag, netname, netdomain) => `\
+const dockerComposeYaml = (dockerimage, dockertag, netname, netdomain) => `\
 version: "2.2"
 services:
   ag-solo:
-    image: ghcr.io/agoric/agoric-sdk:\${SDK_TAG:-${dockertag}}
+    image: ${dockerimage}:\${SDK_TAG:-${dockertag}}
     ports:
       - "\${HOST_PORT:-8000}:\${PORT:-8000}"
     volumes:
@@ -315,6 +316,7 @@ publicapp.get('/docker-compose.yml', (req, res) => {
   res.setHeader('Content-type', 'text/x-yaml;charset=UTF-8');
   res.send(
     dockerComposeYaml(
+      DOCKERIMAGE || dockerImage.split(':')[0],
       DOCKERTAG || dockerImage.split(':')[1],
       NETNAME,
       NETDOMAIN,
