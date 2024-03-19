@@ -103,6 +103,12 @@ start_store_metrics_exporter () {
 install_store_stats_exporter
 start_store_metrics_exporter &
 
+# Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
+resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
+resolved_basename=$(basename "$resolved_config")
+source_config="/config/network/$resolved_basename"
+test ! -e "$source_config" || cp "$source_config" "$resolved_config"
+
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
         echo "agd";
