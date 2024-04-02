@@ -16,10 +16,10 @@ patches:
         value: 2000m
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
-        value: 13Gi
+        value: 24Gi
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/memory
-        value: 13Gi
+        value: 24Gi
       - op: replace
         path: /spec/replicas
         value: 1
