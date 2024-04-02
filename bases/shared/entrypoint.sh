@@ -31,7 +31,7 @@ export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 export MAINFORK_HEIGHT=13512995
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
-export MAINNET_SNAPSHOT="agoric_12973778.tar.lz4"
+export MAINNET_SNAPSHOT="agoric_14297487.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
 export TMPDIR=/state/tmp
@@ -865,15 +865,14 @@ case "$ROLE" in
         start_chain --iavl-disable-fastnode false
         ;;
     "follower")
-        if [[ ! -f "$AGORIC_HOME/data/agoric/swingstore.sqlite" ]]; then
+        if [[ ! -f "/state/follower-initialized" ]]; then
             cd /state/
             if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
                 apt install -y axel
-                axel --quiet -n 10 -o "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT"
+                axel --quiet -n 10 -o "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" || exit 1
             fi
             apt update
             apt install lz4
-
             lz4 -c -d "$MAINNET_SNAPSHOT"  | tar -x -C $AGORIC_HOME
             wget -O addrbook.json "$MAINNET_ADDRBOOK_URL"
             cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
@@ -881,6 +880,7 @@ case "$ROLE" in
             cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
             mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
             sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
+            touch /state/follower-initialized
         fi
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
