@@ -5,4 +5,5 @@ kind: Kustomization
 resources:
   - ../../bases/shared
   - ../../bases/follower
+  - ../../bases/rpcnodes
   - ../../bases/explorer
