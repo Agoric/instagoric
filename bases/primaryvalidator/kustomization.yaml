@@ -68,5 +68,5 @@ patches:
               optional: true
       - op: replace
         path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
-        value: 1000Gi
+        value: 300Gi
   
