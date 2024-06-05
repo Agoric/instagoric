@@ -4,7 +4,9 @@ kind: Kustomization
 
 resources:
   - ../../bases/shared
+  - ../../bases/rpcnodes
   - ../../bases/primaryvalidator
+  - ../../bases/explorer
 #  - ../../bases/validators
 #  - ../../bases/seed
 #  - ../../bases/ag-solo-manual
@@ -17,6 +19,7 @@ configMapGenerator:
     - BOOTSTRAP_CONFIG=@agoric/vats/decentral-core-config.json
     - HONEYCOMB_DATASET=instagoric-local
     - VOTING_PERIOD=2m
+    - NETNAME=${namespace}
 
 secretGenerator:
   - name: instagoric-secrets
