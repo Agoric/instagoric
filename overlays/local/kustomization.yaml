@@ -32,16 +32,6 @@ secretGenerator:
 
 patches:
   - target:
-      kind: Service
-      name: validator-primary
-    patch: |-
-      - op: replace
-        path: /spec/type
-        value: NodePort
-      - op: add
-        path: /spec/ports/0/nodePort
-        value: 30657
-  - target:
       kind: StatefulSet
       name: validator-primary
     patch: |-
