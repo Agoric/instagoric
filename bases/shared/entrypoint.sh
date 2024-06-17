@@ -45,6 +45,7 @@ NAMESPACE=$(cat $NAMESPACE_PATH)
 TOKEN=$(cat $TOKEN_PATH)
 
 mkdir -p "${TMPDIR:-/tmp}"
+rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
 mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
