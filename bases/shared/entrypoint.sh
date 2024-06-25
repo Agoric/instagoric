@@ -28,7 +28,7 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=15490001
+export MAINFORK_HEIGHT=15556261
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
 export MAINNET_SNAPSHOT="agoric_14538863.tar.lz4"
