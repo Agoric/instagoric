@@ -28,7 +28,7 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=13512995
+export MAINFORK_HEIGHT=15556261
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
 export MAINNET_SNAPSHOT="agoric_14538863.tar.lz4"
@@ -51,26 +51,6 @@ chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
-
-install_store_stats_exporter() {
-    mkdir -p $HOME/store-stats
-    cp /config/store-stats/* $HOME/store-stats
-    cd $HOME/store-stats
-    yarn install
-}
-
-start_store_metrics_exporter () {
-    (
-      cd $HOME/store-stats
-      while true; do
-        node store-stats.js $SWINGSTORE >> /state/store-stats-exporter.log 2>&1
-        sleep 120
-      done
-    )
-}
-
-install_store_stats_exporter
-start_store_metrics_exporter &
 
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
