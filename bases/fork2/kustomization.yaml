@@ -36,7 +36,7 @@ patches:
         value: fork2
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
-        value: 50Gi
+        value: 30Gi
       - op: replace
         path: /spec/template/spec/containers/0/resources/requests/memory
-        value: 50Gi
+        value: 30Gi
