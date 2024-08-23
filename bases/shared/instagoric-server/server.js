@@ -1,12 +1,12 @@
 // @ts-check
-// import '@endo/init/legacy.js';
+import '@endo/init/legacy.js';
 import './lockdown.js';
 
 import process from 'process';
 import express from 'express';
 import https from 'https';
 import tmp from 'tmp';
-import { $, fetch, fs, sleep } from 'zx';
+import { $, fetch, fs, nothrow, sleep } from 'zx';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
@@ -28,6 +28,12 @@ const agBinary = AG0_MODE ? 'ag0' : 'agd';
 const podname = process.env.POD_NAME || 'validator-primary';
 const INCLUDE_SEED =  process.env.SEED_ENABLE || 'yes';
 const NODE_ID = process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
+const RPC_PORT = 26657;
+const TRANSACTION_STATUS = {
+  FAILED: 1000,
+  NOT_FOUND: 1001,
+  SUCCESSFUL: 1001,
+};
 
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
@@ -240,8 +246,8 @@ publicapp.get('/', (req, res) => {
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
 ██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗██╔════╝ ██╔═══██╗██╔══██╗██║██╔════╝
-██║██╔██╗ ██║███████╗   ██║   ███████║██║  ███╗██║   ██║██████╔╝██║██║     
-██║██║╚██╗██║╚════██║   ██║   ██╔══██║██║   ██║██║   ██║██╔══██╗██║██║     
+██║██╔██╗ ██║███████╗   ██║   ███████║██║  ███╗██║   ██║██████╔╝██║██║
+██║██║╚██╗██║╚════██║   ██║   ██╔══██║██║   ██║██║   ██║██╔══██╗██║██║
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
@@ -265,11 +271,9 @@ UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
 Jumper Page: <a href="https://app.inter.trade/?network=${netname}">https://app.inter.trade/?network=${netname}</a>
 
-
-
 ----
 See more at <a href="https://agoric.com">https://agoric.com</a>
-</pre></body></html>                                                     
+</pre></body></html>
   `);
 });
 
@@ -381,52 +385,103 @@ const addRequest = (address, request) => {
   publication.updateState(address);
 };
 
+/**
+ * Returns the status of a transaction against hash `txHash`.
+ * The status is one of the values from `TRANSACTION_STATUS`
+ * @param {string} txHash
+ * @returns {Promise<number>}
+ */
+const getTransactionStatus = async txHash => {
+  let { exitCode, stderr, stdout } = await nothrow($`\
+    ${agBinary} query tx ${txHash} \
+    --chain-id=${chainId} \
+    --home=${agoricHome} \
+    --node=http://localhost:${RPC_PORT} \
+    --output=json \
+    --type=hash \
+  `);
+  exitCode = exitCode ?? 1;
+
+  // This check is brittle as this can also happen in case
+  // an invalid txhash was provided. I couldn't find a way
+  // to reliably distinguish between the case of invalid
+  // txhash and a transaction currently in the mempool
+  if (exitCode && stderr.includes(`tx (${txHash}) not found`))
+    return TRANSACTION_STATUS.NOT_FOUND;
+
+  const code = Number(JSON.parse(stdout).code);
+  return code ? TRANSACTION_STATUS.FAILED : TRANSACTION_STATUS.SUCCESSFUL;
+};
+
+/**
+ * Send funds to `address`.
+ * It only waits for the transaction
+ * checks and doesn't wait for the
+ * transaction to actually be included
+ * in a block. The returned transaction
+ * hash can be used to get the current status
+ * of the transaction later
+ * @param {string} address
+ * @param {string} amount
+ * @returns {Promise<[number, string]>}
+ */
+const sendFunds = async (address, amount) => {
+  let { exitCode, stdout } = await nothrow($`\
+    ${agBinary} tx bank send ${FAUCET_KEYNAME} ${address} ${amount} \
+    --broadcast-mode=sync \
+    --chain-id=${chainId} \
+    --keyring-backend=test \
+    --keyring-dir=${agoricHome} \
+    --node=http://localhost:${RPC_PORT} \
+    --output=json \
+    --yes \
+  `);
+  exitCode = exitCode ?? 1;
+
+  if (exitCode) return [exitCode, ''];
+  return [exitCode, String(JSON.parse(stdout).txhash)];
+};
+
 // Faucet worker.
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
 
   try {
     for await (const address of subscription) {
-      // Handle request.
-      console.log('dequeued', address);
+      console.log(`dequeued address ${address}`);
       const request = addressToRequest.get(address);
 
-      const [_a, command, clientType] = request;
+      const [response, command, clientType] = request;
       let exitCode = 1;
+      let txHash = '';
+
+      console.log(`Processing "${command}" for address "${address}"`);
+
       switch (command) {
         case 'client': {
           if (!AG0_MODE) {
-            exitCode = await $`\
-          ${agBinary} tx bank send -b block \
-  ${FAUCET_KEYNAME} ${address} \
-  ${CLIENT_AMOUNT} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId}  --node http://localhost:26657 \
-`.exitCode;
-            if (exitCode === 0) {
+            [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
+            if (!exitCode)
               exitCode = await $`\
-            ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
-  -b block --from ${FAUCET_KEYNAME} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId} --node http://localhost:26657 \
-`.exitCode;
-            }
+                ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
+                --broadcast-mode=block \
+                --chain-id=${chainId} \
+                --from=${FAUCET_KEYNAME} \
+                --keyring-backend=test \
+                --keyring-dir=${agoricHome} \
+                --node=http://localhost:${RPC_PORT} \
+                --yes \
+              `.exitCode;
           }
           break;
         }
         case 'delegate': {
-          exitCode = await $`\
-          ${agBinary} tx bank send -b block \
-  ${FAUCET_KEYNAME} ${address} \
-  ${DELEGATE_AMOUNT} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId} --node http://localhost:26657 \
-`.exitCode;
+          [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
         }
         default: {
           console.log('unknown command');
-          request[0].status(500).send('failure');
+          response.status(500).send('failure');
           // eslint-disable-next-line no-continue
           continue;
         }
@@ -434,11 +489,13 @@ const startFaucetWorker = async () => {
 
       addressToRequest.delete(address);
       if (exitCode === 0) {
-        console.log('Success');
-        request[0].status(200).send('success');
+        console.log(
+          `Successfuly processed "${command}" for address "${address}"`,
+        );
+        response.redirect(`/transaction-status/${txHash}`);
       } else {
-        console.log('Failure');
-        request[0].status(500).send('failure');
+        console.log(`Failed to process "${command}" for address "${address}"`);
+        response.status(500).send('failure');
       }
     }
   } catch (e) {
@@ -504,6 +561,73 @@ faucetapp.post('/go', (req, res) => {
   } else {
     res.status(403).send('invalid form');
   }
+});
+
+faucetapp.get('/api/transaction-status/:txhash', async (req, res) => {
+  const { txhash } = req.params;
+  const transactionStatus = await getTransactionStatus(txhash);
+  res.send({ transactionStatus }).status(200);
+});
+
+faucetapp.get('/transaction-status/:txhash', (req, res) => {
+  const { txhash } = req.params;
+
+  const mainPageLink = `<a href="/">Go Back</a>`;
+
+  if (txhash)
+    res.status(200).send(
+      `
+      <html>
+        <head>
+          <script>
+            var fetchTransactionStatus = function() {
+              fetch("/api/transaction-status/${txhash}")
+              .then(async function(response) {
+                var json = await response.json();
+                if (json.transactionStatus === ${TRANSACTION_STATUS.NOT_FOUND}) setTimeout(fetchTransactionStatus, 2000);
+                else if (json.transactionStatus === ${TRANSACTION_STATUS.SUCCESSFUL}) document.body.innerHTML = \`
+                  <h3>Your transaction "${txhash}" was successfull</h3>
+                  ${mainPageLink}
+                \`;
+                else
+                  document.body.innerHTML = \`
+                    <h3>Your transaction "${txhash}" failed</h3>
+                    ${mainPageLink}
+                  \`;
+              })
+              .catch(function(error) {
+                console.log("error: ", error);
+                setTimeout(fetchTransactionStatus, 2000);
+              })
+            }
+            fetchTransactionStatus();
+          </script>
+          <style>
+            .loader {
+              animation: spin 2s linear infinite;
+              border: 8px solid #000000;
+              border-radius: 50%;
+              border-top: 8px solid #F5F5F5;
+              height: 32px;
+              width: 32px;
+            }
+
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          </style>
+          <title>Faucet</title>
+        </head>
+        <body style="align-items:center; display:flex; flex-direction:column;">
+          <h1 style="width:100%;">Your transaction was enqueued</h1>
+          <p style="width:100%;">Now sit back and relax while your transaction is included in a block</p>
+          <div class="loader"></div>
+        </body>
+      </html>
+      `,
+    );
+  else res.status(400).send('invalid form');
 });
 
 faucetapp.listen(faucetport, () => {
