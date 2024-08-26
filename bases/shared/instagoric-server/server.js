@@ -263,7 +263,7 @@ Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
-Jumper Page: <a href="https://app.inter.trade/?network=${netname}">https://app.inter.trade/?network=${netname}</a>
+Main-branch Vaults: <a href="https://dapp-inter-test.pages.dev/?network=${netname}">https://dapp-inter-test.pages.dev/?network=${netname}</a>
 
 
 
