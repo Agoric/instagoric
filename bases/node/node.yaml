@@ -338,6 +338,8 @@ spec:
               mountPath: /config/server
             - name: store-stats
               mountPath: /config/store-stats
+            - name: vm-config
+              mountPath: /config/vm-config
           resources:
             limits:
               cpu: 1000m
