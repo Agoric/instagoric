@@ -82,10 +82,10 @@ const revision =
 
 /**
  * Deletes a namespace with optional async support
- * @param {{namespace: string; wait?: boolean}} params
+ * @param {string} _namespace
  * @returns {Promise<void>}
  */
-const deleteNamespace = async ({ namespace: _namespace, wait = false }) => {
+const deleteNamespace = async (_namespace) => {
   if ((await getNamespaceStatus(_namespace)) === NAMESPACE_STATUS.DELETED)
     throw new Error(`namespace "${_namespace}" not found`);
 
@@ -192,14 +192,6 @@ const getMetricsRequest = async relativeUrl => {
   const response = await fetch(url.href);
   return response.text();
 };
-
-// eslint-disable-next-line no-unused-vars
-async function getNodeId(node) {
-  const response = await fetch(
-    `http://${node}.${namespace}.svc.cluster.local:26657/status`,
-  );
-  return response.json();
-}
 
 async function getServices() {
   if (FAKE) {
@@ -426,7 +418,7 @@ publicapp.get('/api/namespaces/:namespace/poll-status', async (req, res) =>
 
 publicapp.delete('/api/namespaces/:namespace', async (req, res) => {
   const { namespace } = req.params;
-  await deleteNamespace({ namespace });
+  await deleteNamespace(namespace);
   res.send('');
 });
 
