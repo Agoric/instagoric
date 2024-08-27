@@ -26,8 +26,14 @@ const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
 const agBinary = AG0_MODE ? 'ag0' : 'agd';
 const podname = process.env.POD_NAME || 'validator-primary';
-const INCLUDE_SEED =  process.env.SEED_ENABLE || 'yes';
-const NODE_ID = process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
+const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
+const NODE_ID =
+  process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
+
+const NAMESPACE_STATUS = {
+  ACTIVE: 1000,
+  DELETED: 1001,
+};
 
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
@@ -75,30 +81,110 @@ const revision =
         .trim();
 
 /**
- * @param {string} relativeUrl
+ * Deletes a namespace with optional async support
+ * @param {{namespace: string; wait?: boolean}} params
+ * @returns {Promise<void>}
+ */
+const deleteNamespace = async ({ namespace: _namespace, wait = false }) => {
+  if ((await getNamespaceStatus(_namespace)) === NAMESPACE_STATUS.DELETED)
+    throw new Error(`namespace "${_namespace}" not found`);
+
+  return await makeKubernetesRequest(
+    `/api/v1/namespaces/${_namespace}`,
+    'DELETE',
+  );
+};
+
+/**
+ * This is different from the `getNamespace` function in the
+ * sense that it uses the `list` api to get all the namespaces
+ * and then filter the one we need. This is needed to check
+ * wether a namespace is in terminating phase or not as the
+ * direct fetch endpoint returns `404` for terminating phase namespaces
+ * @param {string} namespace
+ */
+const fetchNamespace = async namespace => {
+  let continueToken = null;
+  let foundNamespace = null;
+
+  do {
+    const data = await makeKubernetesRequest(
+      '/api/v1/namespaces',
+      'GET',
+      [['limit', '100'], continueToken && ['continue', continueToken]].filter(
+        Boolean,
+      ),
+    );
+
+    // Check if the namespace is in the current page of results
+    foundNamespace = data.items.find(ns => ns.metadata.name === namespace);
+
+    if (foundNamespace) break;
+
+    continueToken = data.metadata.continue;
+  } while (continueToken);
+  return foundNamespace;
+};
+
+/**
+ * Fetches the namespace without raising any error. Please
+ * don't ask why use `_namespace` instead of `namespace`
+ * @param {string} _namespace
+ */
+const getNamespace = async _namespace => {
+  try {
+    const response = await makeKubernetesRequest(
+      `/api/v1/namespaces/${_namespace}`,
+    );
+    return response.status !== 'Failure' ? response : null;
+  } catch (err) {
+    console.log(
+      `Failed to fetch namespace "${_namespace}" with error message: ${err.toString()}`,
+    );
+    return null;
+  }
+};
+
+/**
+ * Checks the status of a namespace. Currently this only
+ * supports `ACTIVE` and `DELETED`. More statuses
+ * depecting the lifecycle of the namespace can be added
+ * @param {string} namespace
+ * @returns {Promise<number>}
+ */
+const getNamespaceStatus = async namespace =>
+  !(await fetchNamespace(namespace))
+    ? NAMESPACE_STATUS.DELETED
+    : NAMESPACE_STATUS.ACTIVE;
+
+/**
+ * @param {string} pathName
+ * @param {string} method
+ * @param {Array<[string, string]>} searchParams
  * @returns {Promise<any>}
  */
-const makeKubernetesRequest = async relativeUrl => {
-  const ca = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
-    'utf8',
-  );
-  const token = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/token',
-    'utf8',
-  );
-  const url = new URL(
-    relativeUrl,
-    'https://kubernetes.default.svc.cluster.local',
-  );
-  const response = await fetch(url.href, {
+const makeKubernetesRequest = async (
+  pathName,
+  method = 'GET',
+  searchParams = [],
+) => {
+  const [ca, token] = await Promise.all([
+    fs.readFile('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'utf8'),
+    fs.readFile('/var/run/secrets/kubernetes.io/serviceaccount/token', 'utf8'),
+  ]);
+
+  const url = new URL(pathName, 'https://kubernetes.default.svc.cluster.local');
+  searchParams.forEach(([name, value]) => url.searchParams.append(name, value));
+  const response = await fetch(url.toString(), {
+    agent: new https.Agent({ ca }),
     headers: {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json',
     },
-    agent: new https.Agent({ ca }),
+    method,
   });
-  return response.json();
+
+  return await response.json();
 };
 
 const getMetricsRequest = async relativeUrl => {
@@ -150,11 +236,12 @@ const getNetworkConfig = async () => {
       `${podname}.${namespace}.svc.cluster.local`,
   );
   ap.peers[0] = ap.peers[0].replace(
-    'fb86a0993c694c981a28fa1ebd1fd692f345348b', `${NODE_ID}`,
+    'fb86a0993c694c981a28fa1ebd1fd692f345348b',
+    `${NODE_ID}`,
   );
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
   ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
-  if (INCLUDE_SEED==='yes') {
+  if (INCLUDE_SEED === 'yes') {
     ap.seeds[0] = ap.seeds[0].replace(
       'seed.instagoric.svc.cluster.local',
       svc.get('seed-ext') || `seed.${namespace}.svc.cluster.local`,
@@ -251,7 +338,9 @@ Chain: ${chainId}${
       : ''
   }
 Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]}
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${
+    DOCKERTAG || dockerImage.split(':')[1]
+  }
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -322,6 +411,23 @@ publicapp.get('/docker-compose.yml', (req, res) => {
       NETDOMAIN,
     ),
   );
+});
+
+publicapp.get('/api/namespaces/:namespace', async (req, res) => {
+  const { namespace } = req.params;
+  const response = await getNamespace(namespace);
+  if (!response) res.status(404).send('');
+  res.send(JSON.stringify(response));
+});
+
+publicapp.get('/api/namespaces/:namespace/poll-status', async (req, res) =>
+  res.send(await getNamespaceStatus(req.params.namespace)),
+);
+
+publicapp.delete('/api/namespaces/:namespace', async (req, res) => {
+  const { namespace } = req.params;
+  await deleteNamespace({ namespace });
+  res.send('');
 });
 
 privateapp.get('/', (req, res) => {
