@@ -452,6 +452,9 @@ spec:
         - name: store-stats
           configMap:
             name: store-stats
+        - name: vm-config
+          configMap:
+            name: vm-config
   volumeClaimTemplates:
     - metadata:
         name: state
