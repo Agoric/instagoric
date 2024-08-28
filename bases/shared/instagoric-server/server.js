@@ -1,5 +1,4 @@
 // @ts-check
-import '@endo/init/legacy.js';
 import './lockdown.js';
 
 import process from 'process';
@@ -26,13 +25,14 @@ const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
 const agBinary = AG0_MODE ? 'ag0' : 'agd';
 const podname = process.env.POD_NAME || 'validator-primary';
-const INCLUDE_SEED =  process.env.SEED_ENABLE || 'yes';
-const NODE_ID = process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
+const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
+const NODE_ID =
+  process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
 const RPC_PORT = 26657;
 const TRANSACTION_STATUS = {
   FAILED: 1000,
   NOT_FOUND: 1001,
-  SUCCESSFUL: 1001,
+  SUCCESSFUL: 1002,
 };
 
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
@@ -156,11 +156,12 @@ const getNetworkConfig = async () => {
       `${podname}.${namespace}.svc.cluster.local`,
   );
   ap.peers[0] = ap.peers[0].replace(
-    'fb86a0993c694c981a28fa1ebd1fd692f345348b', `${NODE_ID}`,
+    'fb86a0993c694c981a28fa1ebd1fd692f345348b',
+    `${NODE_ID}`,
   );
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
   ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
-  if (INCLUDE_SEED==='yes') {
+  if (INCLUDE_SEED === 'yes') {
     ap.seeds[0] = ap.seeds[0].replace(
       'seed.instagoric.svc.cluster.local',
       svc.get('seed-ext') || `seed.${namespace}.svc.cluster.local`,
@@ -257,7 +258,9 @@ Chain: ${chainId}${
       : ''
   }
 Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]}
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${
+    DOCKERTAG || dockerImage.split(':')[1]
+  }
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -403,14 +406,61 @@ const getTransactionStatus = async txHash => {
   exitCode = exitCode ?? 1;
 
   // This check is brittle as this can also happen in case
-  // an invalid txhash was provided. I couldn't find a way
-  // to reliably distinguish between the case of invalid
-  // txhash and a transaction currently in the mempool
+  // an invalid txhash was provided. So there is no reliable
+  // distinction between the case of invalid txhash and a
+  // transaction currently in the mempool. We could use search
+  // endpoint but that seems overkill to cover a case where
+  // the only the deliberate use of invalid hash can effect the user
   if (exitCode && stderr.includes(`tx (${txHash}) not found`))
     return TRANSACTION_STATUS.NOT_FOUND;
 
   const code = Number(JSON.parse(stdout).code);
   return code ? TRANSACTION_STATUS.FAILED : TRANSACTION_STATUS.SUCCESSFUL;
+};
+
+/**
+ * Returns the status of a transaction against hash `txHash`.
+ * The status is one of the values from `TRANSACTION_STATUS`
+ * @param {string} address
+ * @param {string} clientType
+ * @param {string} txHash
+ * @returns {Promise<void>}
+ */
+const pollForProvisioning = async (address, clientType, txHash) => {
+  const status = await getTransactionStatus(txHash);
+  status === TRANSACTION_STATUS.NOT_FOUND
+    ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
+    : status === TRANSACTION_STATUS.SUCCESSFUL
+    ? await provisionAddress(address, clientType)
+    : console.log(
+        `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
+      );
+};
+
+/**
+ * Returns the status of a transaction against hash `txHash`.
+ * The status is one of the values from `TRANSACTION_STATUS`
+ * @param {string} address
+ * @param {string} clientType
+ * @returns {Promise<void>}
+ */
+const provisionAddress = async (address, clientType) => {
+  let { exitCode, stderr } = await nothrow($`\
+    ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
+    --broadcast-mode=block \
+    --chain-id=${chainId} \
+    --from=${FAUCET_KEYNAME} \
+    --keyring-backend=test \
+    --keyring-dir=${agoricHome} \
+    --node=http://localhost:${RPC_PORT} \
+    --yes \
+  `);
+  exitCode = exitCode ?? 1;
+
+  if (exitCode)
+    console.log(
+      `Failed to provision address "${address}" of type "${clientType}" with error message: ${stderr}`,
+    );
 };
 
 /**
@@ -462,16 +512,7 @@ const startFaucetWorker = async () => {
           if (!AG0_MODE) {
             [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
             if (!exitCode)
-              exitCode = await $`\
-                ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
-                --broadcast-mode=block \
-                --chain-id=${chainId} \
-                --from=${FAUCET_KEYNAME} \
-                --keyring-backend=test \
-                --keyring-dir=${agoricHome} \
-                --node=http://localhost:${RPC_PORT} \
-                --yes \
-              `.exitCode;
+              pollForProvisioning(address, clientType, txHash);
           }
           break;
         }
@@ -482,7 +523,6 @@ const startFaucetWorker = async () => {
         default: {
           console.log('unknown command');
           response.status(500).send('failure');
-          // eslint-disable-next-line no-continue
           continue;
         }
       }
@@ -504,6 +544,7 @@ const startFaucetWorker = async () => {
     startFaucetWorker();
   }
 };
+
 startFaucetWorker();
 
 privateapp.listen(privateport, () => {
@@ -572,7 +613,7 @@ faucetapp.get('/api/transaction-status/:txhash', async (req, res) => {
 faucetapp.get('/transaction-status/:txhash', (req, res) => {
   const { txhash } = req.params;
 
-  const mainPageLink = `<a href="/">Go Back</a>`;
+  const mainPageLink = `<a href="/">Go to Main Page</a>`;
 
   if (txhash)
     res.status(200).send(
