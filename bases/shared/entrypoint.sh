@@ -345,8 +345,62 @@ start_helper () {
     )
 }
 
+auto_approve () {
+    if [ "$AUTO_APPROVE_PROPOSAL" = "true" ]; then
+        POLL_INTERVAL=10
+        FROM_ACCOUNT=self
+
+        # Initialise Processed Proposals File
+        PROCESSED_PROPOSALS_FILE="processed_proposals.txt"
+
+        # Check if the file exists and reinitialize it on script restart
+        if [ -e "$PROCESSED_PROPOSALS_FILE" ]; then
+            > "$PROCESSED_PROPOSALS_FILE"
+            echo "File '$PROCESSED_PROPOSALS_FILE' has been cleared."
+        else
+            touch $PROCESSED_PROPOSALS_FILE
+            echo "File '$PROCESSED_PROPOSALS_FILE' created."
+        fi
+
+        while true; do
+            # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
+            PROPOSALS=$($(ag_binary) query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2> /dev/null)
+
+            # Extract proposal IDs
+            PROPOSAL_IDS=$(echo $PROPOSALS | jq -r '.proposals[].id')
+
+            echo $PROPOSAL_IDS
+
+            if [ -n "$PROPOSAL_IDS" ]; then
+                for PROPOSAL_ID in $PROPOSAL_IDS; do
+                    # Check if the proposal has already been processed to avoid re-vote and processing
+
+                    if grep -q $PROPOSAL_ID $PROCESSED_PROPOSALS_FILE; then
+                        continue
+                    fi
+                    echo "Voting YES on proposal ID: $PROPOSAL_ID"
+
+                    # Vote YES on the proposal
+                    $(ag_binary) tx gov vote $PROPOSAL_ID yes \
+                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null 2>&1
+
+                    echo $PROPOSAL_ID >> $PROCESSED_PROPOSALS_FILE
+                    echo "Voted YES on proposal ID: $PROPOSAL_ID"
+                done
+            else
+                echo "No new proposals to vote on."
+            fi
+
+            # Wait for the next poll
+            sleep $POLL_INTERVAL
+        done
+    fi
+}
+
 start_chain () {
     # shellcheck disable=SC2068
+    auto_approve &
+
     if [[ -z "$AG0_MODE" ]]; then 
         extra=""
         if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
@@ -356,11 +410,6 @@ start_chain () {
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
-
-        if [ "$AUTO_APPROVE_PROPOSALS" = "true" ]; then
-            ./scripts/auto-approve.sh $(ag_binary) &
-        fi
-        
     fi
 }
 
