@@ -49,7 +49,6 @@ mkdir -p "${TMPDIR:-/tmp}"
 rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
 mkdir -p /state/cores
 chmod a+rwx /state/cores
-chmod a+rwx scripts/auto-approve.sh
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
@@ -350,18 +349,6 @@ auto_approve () {
         POLL_INTERVAL=10
         FROM_ACCOUNT=self
 
-        # Initialise Processed Proposals File
-        PROCESSED_PROPOSALS_FILE="processed_proposals.txt"
-
-        # Check if the file exists and reinitialize it on script restart
-        if [ -e "$PROCESSED_PROPOSALS_FILE" ]; then
-            > "$PROCESSED_PROPOSALS_FILE"
-            echo "File '$PROCESSED_PROPOSALS_FILE' has been cleared."
-        else
-            touch $PROCESSED_PROPOSALS_FILE
-            echo "File '$PROCESSED_PROPOSALS_FILE' created."
-        fi
-
         while true; do
             # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
             PROPOSALS=$($(ag_binary) query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2> /dev/null)
@@ -373,18 +360,21 @@ auto_approve () {
 
             if [ -n "$PROPOSAL_IDS" ]; then
                 for PROPOSAL_ID in $PROPOSAL_IDS; do
-                    # Check if the proposal has already been processed to avoid re-vote and processing
+                    # Skip processing if already voted YES on the proposal with self account
 
-                    if grep -q $PROPOSAL_ID $PROCESSED_PROPOSALS_FILE; then
+                    VOTES=$($(ag_binary) query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
+                    ACCOUNT_VOTE=$( [ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $($(ag_binary) keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
+                    
+
+                    if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
+                        echo "Already voted YES on proposal ID: $PROPOSAL_ID"
                         continue
                     fi
-                    echo "Voting YES on proposal ID: $PROPOSAL_ID"
 
                     # Vote YES on the proposal
                     $(ag_binary) tx gov vote $PROPOSAL_ID yes \
                         --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null 2>&1
 
-                    echo $PROPOSAL_ID >> $PROCESSED_PROPOSALS_FILE
                     echo "Voted YES on proposal ID: $PROPOSAL_ID"
                 done
             else
