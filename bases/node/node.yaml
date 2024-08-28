@@ -147,6 +147,12 @@ spec:
                   name: instagoric-release
                   key: PRUNING
                   optional: true
+            - name: AUTO_APPROVE_PROPOSAL
+              valueFrom:
+                configMapKeyRef:
+                  name: instagoric-release
+                  key: AUTO_APPROVE_PROPOSAL
+                  optional: true
             - name: WHALE_SEED
               valueFrom:
                 secretKeyRef:

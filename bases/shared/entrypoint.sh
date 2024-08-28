@@ -17,6 +17,7 @@ export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
 export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
+export AUTO_APPROVE_PROPOSALS=${AUTO_APPROVE_PROPOSALS:-"false"}
 mkdir -p $AGORIC_HOME
 if [[ -z "$AG0_MODE" ]]; then 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
@@ -48,6 +49,7 @@ mkdir -p "${TMPDIR:-/tmp}"
 rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
 mkdir -p /state/cores
 chmod a+rwx /state/cores
+chmod a+rwx scripts/auto-approve.sh
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
@@ -353,7 +355,12 @@ start_chain () {
         fi
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
+
+        if [ "$AUTO_APPROVE_PROPOSALS" = "true" ]; then
+            ./scripts/auto-approve.sh $(ag_binary) &
+        fi
+        
     fi
 }
 
