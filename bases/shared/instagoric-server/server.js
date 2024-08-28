@@ -419,8 +419,6 @@ const getTransactionStatus = async txHash => {
 };
 
 /**
- * Returns the status of a transaction against hash `txHash`.
- * The status is one of the values from `TRANSACTION_STATUS`
  * @param {string} address
  * @param {string} clientType
  * @param {string} txHash
@@ -438,8 +436,6 @@ const pollForProvisioning = async (address, clientType, txHash) => {
 };
 
 /**
- * Returns the status of a transaction against hash `txHash`.
- * The status is one of the values from `TRANSACTION_STATUS`
  * @param {string} address
  * @param {string} clientType
  * @returns {Promise<void>}
