@@ -260,6 +260,7 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
+Logs: <a href='https://${netname}.logs${domain}/d/aduznatawfxmob/cluster-logs?orgId=1&viewPanel=1&from=now-1m&to=now&var-userQuery=resource.labels.container_name%3D"log-slog"'>https://${netname}.logs${domain}</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
