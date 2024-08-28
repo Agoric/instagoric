@@ -17,7 +17,7 @@ export VOTING_PERIOD=${VOTING_PERIOD:-18h}
 export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
 export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
-export AUTO_APPROVE_PROPOSALS=${AUTO_APPROVE_PROPOSALS:-"false"}
+export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
 mkdir -p $AGORIC_HOME
 if [[ -z "$AG0_MODE" ]]; then 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
