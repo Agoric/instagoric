@@ -373,7 +373,7 @@ auto_approve () {
 
                     # Vote YES on the proposal
                     $(ag_binary) tx gov vote $PROPOSAL_ID yes \
-                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null 2>&1
+                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null
 
                     echo "Voted YES on proposal ID: $PROPOSAL_ID"
                 done
