@@ -401,6 +401,18 @@ const getDenoms = async () => {
   return output.supply.map((element) => element.denom);
 }
 
+const sendFunds = async (accountAddress, amounts) => {
+  const exitCode = await $`\
+          ${agBinary} tx bank send -b block \
+  ${FAUCET_KEYNAME} ${accountAddress} ${amounts} \
+  -y --keyring-backend test --keyring-dir=${agoricHome} \
+  --chain-id=${chainId} --node http://localhost:26657 \
+`.exitCode;
+
+return exitCode;
+
+} 
+
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
 
@@ -418,13 +430,8 @@ const startFaucetWorker = async () => {
       switch (command) {
         case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
-            exitCode = await $`\
-          ${agBinary} tx bank send -b block \
-  ${FAUCET_KEYNAME} ${address} \
-  ${CLIENT_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['uist'])} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId}  --node http://localhost:26657 \
-`.exitCode;
+
+            exitCode = await sendFunds(address, CLIENT_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['uist']));
             if (exitCode === 0) {
               exitCode = await $`\
             ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
@@ -438,34 +445,17 @@ const startFaucetWorker = async () => {
         }
         case COMMANDS["SEND_BLD/IBC"]: {
           const ibcDenoms = denomsInChain.filter(denom => denom.startsWith('ibc'));
-          exitCode = await $`\
-          ${agBinary} tx bank send -b block \
-  ${FAUCET_KEYNAME} ${address} \
-  ${DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['ubld', ...ibcDenoms])} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId} --node http://localhost:26657 \
-`.exitCode;
+          exitCode = await sendFunds(address, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['ubld', ...ibcDenoms]));
           break;
         }
         case COMMANDS["FUND_PROV_POOL"]: {
-          exitCode = await $`\
-          ${agBinary} tx bank send -b block \
-  ${FAUCET_KEYNAME} ${PROVISIONING_POOL_ADDR} \
-  ${DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, denomsInChain)} \
-  -y --keyring-backend test --keyring-dir=${agoricHome} \
-  --chain-id=${chainId} --node http://localhost:26657 \
-`.exitCode;
+          exitCode = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, denomsInChain));
           break;
         }
 
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
-            exitCode = await $`\
-            ${agBinary} tx bank send -b block \
-    ${FAUCET_KEYNAME} ${address} \
-    ${DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms])} \
-    -y --keyring-backend test --keyring-dir=${agoricHome} \
-    --chain-id=${chainId} --node http://localhost:26657 \
-  `.exitCode;
+            console.log('HERE');
+            exitCode = await sendFunds(address, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
             break;
 
         }
