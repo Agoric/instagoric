@@ -2,56 +2,42 @@
 set -x
 set +e
 
-#use of primary is required for bootstrapping, as rpcnodes may be serving nodes of various registration states during early bootup
-export PRIMARY_ENDPOINT="http://validator-primary.$NAMESPACE.svc.cluster.local"
-export RPC_ENDPOINT="http://rpcnodes.$NAMESPACE.svc.cluster.local"
-export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
-export WHALE_KEYNAME="whale"
-export CHAIN_ID=${CHAIN_ID:-instagoric-1}
-export AGORIC_HOME="/state/$CHAIN_ID"
-boottime="$(date '+%s')"
-export SLOGFILE="/state/slogfile_${boottime}.json"
-export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
-export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
-export VOTING_PERIOD=${VOTING_PERIOD:-18h}
-export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
-export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
-export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
-export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
+CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
+
+# shellcheck disable=SC1091
+source "$CURRENT_DIRECTORY_PATH/source.sh"
+
 mkdir -p $AGORIC_HOME
-if [[ -z "$AG0_MODE" ]]; then 
-version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
-else
-version=ag0
-fi
-export DD_VERSION="$version"
-export DD_ENV=$CHAIN_ID
-export DD_SERVICE="agd"
-export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=15556261
-export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
-
-export MAINNET_SNAPSHOT="agoric_15131589.tar.lz4"
-export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
-export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
-export TMPDIR=/state/tmp
-
-# Kubernetes API constants
-API_ENDPOINT=https://kubernetes.default.svc
-TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
-CA_PATH=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-NAMESPACE_PATH=/var/run/secrets/kubernetes.io/serviceaccount/namespace
-NAMESPACE=$(cat $NAMESPACE_PATH)
-TOKEN=$(cat $TOKEN_PATH)
-
-mkdir -p "${TMPDIR:-/tmp}"
+mkdir -p "$TMPDIR"
 rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
 mkdir -p /state/cores
 chmod a+rwx /state/cores
+
+# TODO: evaluate if this is needed as this fails on read only file system
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
+
+install_store_stats_exporter() {
+    mkdir -p $HOME/store-stats
+    cp /config/store-stats/* $HOME/store-stats
+    cd $HOME/store-stats
+    yarn install
+}
+
+start_store_metrics_exporter () {
+    (
+      cd $HOME/store-stats
+      while true; do
+        node store-stats.js $SWINGSTORE >> /state/store-stats-exporter.log 2>&1
+        sleep 120
+      done
+    )
+}
+
+install_store_stats_exporter
+start_store_metrics_exporter &
 
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
@@ -344,53 +330,8 @@ start_helper () {
     )
 }
 
-auto_approve () {
-    if [ "$AUTO_APPROVE_PROPOSAL" = "true" ]; then
-        POLL_INTERVAL=10
-        FROM_ACCOUNT=self
-
-        while true; do
-            # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
-            PROPOSALS=$($(ag_binary) query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2> /dev/null)
-
-            # Extract proposal IDs
-            PROPOSAL_IDS=$(echo $PROPOSALS | jq -r '.proposals[].id')
-
-            echo $PROPOSAL_IDS
-
-            if [ -n "$PROPOSAL_IDS" ]; then
-                for PROPOSAL_ID in $PROPOSAL_IDS; do
-                    # Skip processing if already voted YES on the proposal with self account
-
-                    VOTES=$($(ag_binary) query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
-                    ACCOUNT_VOTE=$( [ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $($(ag_binary) keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
-                    
-
-                    if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
-                        echo "Already voted YES on proposal ID: $PROPOSAL_ID"
-                        continue
-                    fi
-
-                    # Vote YES on the proposal
-                    $(ag_binary) tx gov vote $PROPOSAL_ID yes \
-                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null
-
-                    echo "Voted YES on proposal ID: $PROPOSAL_ID"
-                done
-            else
-                echo "No new proposals to vote on."
-            fi
-
-            # Wait for the next poll
-            sleep $POLL_INTERVAL
-        done
-    fi
-}
-
 start_chain () {
     # shellcheck disable=SC2068
-    auto_approve &
-
     if [[ -z "$AG0_MODE" ]]; then 
         extra=""
         if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
@@ -399,7 +340,7 @@ start_chain () {
         fi
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
     fi
 }
 
