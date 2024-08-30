@@ -19,26 +19,6 @@ echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
 ln -sf "$SLOGFILE" /state/slogfile_current.json
 
-install_store_stats_exporter() {
-    mkdir -p $HOME/store-stats
-    cp /config/store-stats/* $HOME/store-stats
-    cd $HOME/store-stats
-    yarn install
-}
-
-start_store_metrics_exporter () {
-    (
-      cd $HOME/store-stats
-      while true; do
-        node store-stats.js $SWINGSTORE >> /state/store-stats-exporter.log 2>&1
-        sleep 120
-      done
-    )
-}
-
-install_store_stats_exporter
-start_store_metrics_exporter &
-
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
 resolved_basename=$(basename "$resolved_config")
@@ -330,8 +310,52 @@ start_helper () {
     )
 }
 
+auto_approve () {
+    if [ "$AUTO_APPROVE_PROPOSAL" = "true" ]; then
+        POLL_INTERVAL=10
+        FROM_ACCOUNT=self
+
+        while true; do
+            # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
+            PROPOSALS=$($(ag_binary) query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2> /dev/null)
+
+            # Extract proposal IDs
+            PROPOSAL_IDS=$(echo $PROPOSALS | jq -r '.proposals[].id')
+
+            echo $PROPOSAL_IDS
+
+            if [ -n "$PROPOSAL_IDS" ]; then
+                for PROPOSAL_ID in $PROPOSAL_IDS; do
+                    # Skip processing if already voted YES on the proposal with self account
+
+                    VOTES=$($(ag_binary) query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
+                    ACCOUNT_VOTE=$( [ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $($(ag_binary) keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
+
+
+                    if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
+                        echo "Already voted YES on proposal ID: $PROPOSAL_ID"
+                        continue
+                    fi
+
+                    # Vote YES on the proposal
+                    $(ag_binary) tx gov vote $PROPOSAL_ID yes \
+                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes > /dev/null
+
+                    echo "Voted YES on proposal ID: $PROPOSAL_ID"
+                done
+            else
+                echo "No new proposals to vote on."
+            fi
+
+            # Wait for the next poll
+            sleep $POLL_INTERVAL
+        done
+    fi
+}
+
 start_chain () {
-    # shellcheck disable=SC2068
+    auto_approve &
+
     if [[ -z "$AG0_MODE" ]]; then 
         extra=""
         if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
@@ -340,7 +364,7 @@ start_chain () {
         fi
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1 
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
     fi
 }
 

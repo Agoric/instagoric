@@ -1,6 +1,7 @@
 #!/bin/bash
 
 export API_ENDPOINT=https://kubernetes.default.svc
+export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
 # shellcheck disable=SC2155
 export boottime="$(date '+%s')"
 export CA_PATH=${CA_PATH:-"/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"}
