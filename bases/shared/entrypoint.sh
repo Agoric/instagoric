@@ -338,7 +338,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start >> /state/server.log 2>&1 
+        rm yarn.lock && yarn install && yarn start >> /state/server.log 2>&1
         sleep 1
       done
     )
