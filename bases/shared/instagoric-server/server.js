@@ -6,9 +6,11 @@ import express from 'express';
 import https from 'https';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
+import multer from 'multer';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
+const upload = multer({ dest: 'uploads/' })
 const { details: X } = globalThis.assert;
 
 const CLIENT_AMOUNT =
@@ -666,6 +668,74 @@ faucetapp.get('/transaction-status/:txhash', (req, res) => {
       `,
     );
   else res.status(400).send('invalid form');
+});
+
+publicapp.get('/install-bundle', async (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+</head>
+<body>
+
+    <h1>Upload a File</h1>
+
+    <form id="uploadForm" action="/install-bundle" method="POST" enctype="multipart/form-data">
+        <input type="file" name="file" id="fileInput" required>
+        <br><br>
+        <button type="submit">Upload</button>
+    </form>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            const formData = new FormData();
+            const fileInput = document.getElementById('fileInput');
+            
+            if (fileInput.files.length === 0) {
+                alert("Please select a file.");
+                return;
+            }
+
+            formData.append('file', fileInput.files[0]);
+
+            fetch('/install-bundle', {
+                method: 'POST',
+                body: formData
+            })
+            .then(data => {
+                alert('File uploaded successfully!');
+                console.log(data);
+            })
+            .catch(error => {
+                alert('Failed to upload file.');
+                console.error('Error:', error);
+            });
+        });
+    </script>
+
+</body>
+</html>
+  `);
+});
+
+publicapp.post('/install-bundle', upload.single('file') ,async (req, res) => {
+  // Getting file from request and storing as temp file
+  const bundle = (req.file?.filename);
+  const result = await $`\
+    ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
+    --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
+    --chain-id=${chainId} -b block --yes
+  `;
+  if (result.exitCode !== 0) {
+    res.status(500).send(result.stderr);
+    return;
+  }
+  res.status(200).send('success');
 });
 
 faucetapp.listen(faucetport, () => {
