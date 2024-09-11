@@ -67,7 +67,7 @@ const namespace =
     flag: 'r',
   });
 
-  const revision =
+const revision =
   process.env.AG0_MODE === 'true'
     ? 'ag0'
     : fs
