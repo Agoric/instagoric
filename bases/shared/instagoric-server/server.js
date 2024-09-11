@@ -723,9 +723,13 @@ publicapp.get('/install-bundle', async (req, res) => {
   `);
 });
 
-publicapp.post('/install-bundle', upload.single('file') ,async (req, res) => {
+publicapp.post('/install-bundle', upload.single('file'), async (req, res) => {
   // Getting file from request and storing as temp file
-  const bundle = (req.file?.filename);
+  const bundle = req.file?.filename;
+  if (!bundle) {
+    res.status(400).send('invalid form');
+    return;
+  }
   const result = await $`\
     ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
     --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
