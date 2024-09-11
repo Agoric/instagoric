@@ -344,6 +344,8 @@ spec:
               mountPath: /config/server
             - name: store-stats
               mountPath: /config/store-stats
+            - name: vm-config
+              mountPath: /config/vm-config
           resources:
             limits:
               cpu: 1000m
@@ -456,6 +458,9 @@ spec:
         - name: store-stats
           configMap:
             name: store-stats
+        - name: vm-config
+          configMap:
+            name: vm-config
   volumeClaimTemplates:
     - metadata:
         name: state
