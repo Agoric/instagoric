@@ -67,7 +67,7 @@ const namespace =
     flag: 'r',
   });
 
-const revision =
+  const revision =
   process.env.AG0_MODE === 'true'
     ? 'ag0'
     : fs
@@ -244,7 +244,20 @@ publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
   res.send(`
-<html><head><title>Instagoric</title></head><body><pre>
+<html>
+  <head>
+    <script>
+      function onBlockHeightChange(event) {
+        var blockHeight = event.target.value;
+        if (blockHeight && !isNaN(blockHeight))
+          document.getElementById("block-height-logs-link").href =
+          'https://${netname}.logs${domain}/d/aduznatawfxmob/cluster-logs?orgId=1&viewPanel=1&from=now-1m&to=now&var-userQuery=jsonPayload.blockHeight%3D"' + blockHeight + '"';
+      }
+    </script>
+    <title>Instagoric</title>
+  </head>
+  <body>
+    <pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
 ██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗██╔════╝ ██╔═══██╗██╔══██╗██║██╔════╝
 ██║██╔██╗ ██║███████╗   ██║   ███████║██║  ███╗██║   ██║██████╔╝██║██║
@@ -270,6 +283,7 @@ API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 Logs: <a href='https://${netname}.logs${domain}/d/aduznatawfxmob/cluster-logs?orgId=1&viewPanel=1&from=now-1m&to=now&var-userQuery=resource.labels.container_name%3D"log-slog"'>https://${netname}.logs${domain}</a>
+Block Height Logs: <input oninput="onBlockHeightChange(event)" /> <a href='https://${netname}.logs${domain}/d/aduznatawfxmob/cluster-logs?orgId=1&viewPanel=1&from=now-1m&to=now' id="block-height-logs-link" target="_blank">Show Logs</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -277,7 +291,9 @@ Main-branch Vaults: <a href="https://dapp-inter-test.pages.dev/?network=${netnam
 
 ----
 See more at <a href="https://agoric.com">https://agoric.com</a>
-</pre></body></html>
+    </pre>
+  </body>
+</html>
   `);
 });
 
