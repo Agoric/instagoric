@@ -7,7 +7,7 @@ CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source "$CURRENT_DIRECTORY_PATH/source.sh"
 
-mkdir -p $AGORIC_HOME
+mkdir -p "$AGORIC_HOME"
 
 mkdir -p "$TMPDIR"
 rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
@@ -304,7 +304,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start >> /state/server.log 2>&1 
+        yarn start >> /state/server.log 2>&1
         sleep 1
       done
     )

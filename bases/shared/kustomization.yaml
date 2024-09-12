@@ -25,3 +25,6 @@ configMapGenerator:
     files:
       - tools/store-stats/package.json
       - tools/store-stats/store-stats.js
+  - name: vm-config
+    files:
+      - resources/decentral-test-vaults-config.json
