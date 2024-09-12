@@ -6,6 +6,7 @@ CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
 
 # shellcheck disable=SC1091
 source "$CURRENT_DIRECTORY_PATH/source.sh"
+/bin/bash "$CURRENT_DIRECTORY_PATH/log-rotation.sh"
 
 mkdir -p "$AGORIC_HOME"
 
@@ -362,9 +363,9 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
+        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json "$@"  >> /state/app.log 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json "$@" >> /state/app.log 2>&1
     fi
 }
 
@@ -707,7 +708,7 @@ case "$ROLE" in
         sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ -z "$AG0_MODE" ]]; then 
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
         fi
         patch_validator_config
@@ -748,7 +749,7 @@ case "$ROLE" in
         if [[ -z "$AG0_MODE" ]]; then 
         
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
             export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         fi
