@@ -6,7 +6,7 @@ CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
 
 # shellcheck disable=SC1091
 source "$CURRENT_DIRECTORY_PATH/source.sh"
-/bin/bash "$CURRENT_DIRECTORY_PATH/log-rotation.sh"
+/bin/bash "$CURRENT_DIRECTORY_PATH/log-rotation.sh" &
 
 mkdir -p "$AGORIC_HOME"
 
