@@ -20,7 +20,7 @@ cat <<EOF >> "$LOGROTATE_CONFIG_FILE_PATH"
     rotate 1
     size 1
     postrotate
-        /bin/bash -c "ls -al /state >> /state/temp.log"
+        /bin/bash "ls -al /state >> /state/temp.log"
     endscript
 }
 EOF
