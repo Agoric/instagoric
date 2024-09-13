@@ -85,10 +85,14 @@ const revision =
  * @returns {Promise<any>}
  */
 const makeKubernetesRequest = async relativeUrl => {
-  const [ca, token] = await Promise.all([
-    fs.readFile(String(process.env.CA_PATH), 'utf8'),
-    fs.readFile(String(process.env.TOKEN_PATH), 'utf8'),
-  ]);
+  const ca = await fs.readFile(
+    '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
+    'utf8',
+  );
+  const token = await fs.readFile(
+    '/var/run/secrets/kubernetes.io/serviceaccount/token',
+    'utf8',
+  );
   const url = new URL(
     relativeUrl,
     'https://kubernetes.default.svc.cluster.local',
@@ -100,7 +104,7 @@ const makeKubernetesRequest = async relativeUrl => {
     },
     agent: new https.Agent({ ca }),
   });
-  return await response.json();
+  return response.json();
 };
 
 const getMetricsRequest = async relativeUrl => {
@@ -108,6 +112,14 @@ const getMetricsRequest = async relativeUrl => {
   const response = await fetch(url.href);
   return response.text();
 };
+
+// eslint-disable-next-line no-unused-vars
+async function getNodeId(node) {
+  const response = await fetch(
+    `http://${node}.${namespace}.svc.cluster.local:26657/status`,
+  );
+  return response.json();
+}
 
 async function getServices() {
   if (FAKE) {
@@ -496,7 +508,8 @@ const startFaucetWorker = async () => {
         case 'client': {
           if (!AG0_MODE) {
             [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
-            if (!exitCode) pollForProvisioning(address, clientType, txHash);
+            if (!exitCode)
+              pollForProvisioning(address, clientType, txHash);
           }
           break;
         }
