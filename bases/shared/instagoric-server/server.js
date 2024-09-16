@@ -607,7 +607,7 @@ faucetapp.get('/', async (req, res) => {
     function toggleRadio(event) {
             var field = document.getElementById('denoms');
 
-            if (event.target.value === "custom_denoms_list") {        
+            if (event.target.value === "${COMMANDS['CUSTOM_DENOMS_LIST']}") {        
               field.style.display = 'block';
             } else if (field.style.display === 'block') {  
                field.style.display = 'none';
