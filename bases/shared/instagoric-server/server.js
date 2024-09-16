@@ -11,6 +11,9 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
+// Adding here to avoid ReferenceError for local server. Not needed for k8
+let CLUSTER_NAME;
+
 const CLIENT_AMOUNT =
   process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
 const DELEGATE_AMOUNT =
@@ -243,7 +246,7 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
-  const logsQuery = { "62l": { "queries": [{ "queryText": "resource.labels.container_name=\"log-slog\"" }] } }
+  const logsQuery = { "62l": { "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
   const logsUrl = `https://${netname}.logs${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
