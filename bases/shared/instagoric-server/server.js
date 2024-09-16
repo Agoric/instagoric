@@ -71,14 +71,14 @@ const revision =
   process.env.AG0_MODE === 'true'
     ? 'ag0'
     : fs
-        .readFileSync(
-          '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
-          {
-            encoding: 'utf8',
-            flag: 'r',
-          },
-        )
-        .trim();
+      .readFileSync(
+        '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
+        {
+          encoding: 'utf8',
+          flag: 'r',
+        },
+      )
+      .trim();
 
 /**
  * @param {string} relativeUrl
@@ -153,7 +153,7 @@ const getNetworkConfig = async () => {
   ap.peers[0] = ap.peers[0].replace(
     'validator-primary.instagoric.svc.cluster.local',
     svc.get('validator-primary-ext') ||
-      `${podname}.${namespace}.svc.cluster.local`,
+    `${podname}.${namespace}.svc.cluster.local`,
   );
   ap.peers[0] = ap.peers[0].replace(
     'fb86a0993c694c981a28fa1ebd1fd692f345348b',
@@ -243,6 +243,8 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
+  const logsQuery = { "62l": { "queries": [{ "queryText": "resource.labels.container_name=\"log-slog\"" }] } }
+  const logsUrl = `https://${netname}.logs${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -252,15 +254,13 @@ publicapp.get('/', (req, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${chainId}${
-    process.env.NETPURPOSE !== undefined
+Chain: ${chainId}${process.env.NETPURPOSE !== undefined
       ? `\nPurpose: ${process.env.NETPURPOSE}`
       : ''
-  }
+    }
 Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${
-    DOCKERTAG || dockerImage.split(':')[1]
-  }
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]
+    }
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -269,7 +269,7 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href='https://${netname}.logs${domain}/d/aduznatawfxmob/cluster-logs?orgId=1&viewPanel=1&from=now-1m&to=now&var-userQuery=resource.labels.container_name%3D"log-slog"'>https://${netname}.logs${domain}</a>
+Logs: <a href=${logsUrl}>https://${netname}.logs${domain}</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -430,8 +430,8 @@ const pollForProvisioning = async (address, clientType, txHash) => {
   status === TRANSACTION_STATUS.NOT_FOUND
     ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
     : status === TRANSACTION_STATUS.SUCCESSFUL
-    ? await provisionAddress(address, clientType)
-    : console.log(
+      ? await provisionAddress(address, clientType)
+      : console.log(
         `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
       );
 };
