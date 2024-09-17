@@ -7,17 +7,18 @@ CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
 # shellcheck disable=SC1091
 source "$CURRENT_DIRECTORY_PATH/source.sh"
 
-mkdir -p "$AGORIC_HOME"
+mkdir --parents "$AGORIC_HOME"
 
-mkdir -p "$TMPDIR"
-rm -rf -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
-mkdir -p /state/cores
+mkdir --parents "$TMPDIR"
+# shellcheck disable=SC2086,SC2115
+rm --force --recursive -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
+mkdir --parents /state/cores
 chmod a+rwx /state/cores
 
 # TODO: evaluate if this is needed as this fails on read only file system
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
-ln -sf "$SLOGFILE" /state/slogfile_current.json
+ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
@@ -92,22 +93,6 @@ ensure_self_solo_key () {
     cp "$AG_SOLO_BASEDIR/ag-solo-mnemonic" /state/self.key
     key_address=$($(ag_binary) keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
     echo "$key_address" > /state/self.address
-}
-
-tell_primary_about_validator () {
-    while true; do
-        if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
-            break
-        fi
-        echo "node not yet up, waiting to register"
-        sleep 5
-    done
-    echo "Node Up"
-
-    node_id=$($(ag_binary) tendermint show-node-id --home "$AGORIC_HOME")
-    dial_result=$(curl --fail -m 15 -sS -g "$PRIMARY_ENDPOINT:26657/dial_peers?peers=[\"$node_id@$POD_IP:26656\"]&persistent=true&private=false")
-    echo "Dialed Primary: $dial_result"
-
 }
 
 get_whale_index () { 
@@ -708,7 +693,7 @@ case "$ROLE" in
         sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ -z "$AG0_MODE" ]]; then 
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
         fi
         patch_validator_config
@@ -749,7 +734,7 @@ case "$ROLE" in
         if [[ -z "$AG0_MODE" ]]; then 
         
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
             export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         fi
