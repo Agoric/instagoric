@@ -525,6 +525,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@DD_TRACES@/${ddtracetarget}/" \
                 -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
                 -e "s/@DD_SITE@/${DD_SITE}/" \
+                -e "s/@NAMESPACE@/${NAMESPACE}/" \
                 "$HOME/instagoric-otel-config.yaml"
             (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> /state/otel.log  2>&1) &
     fi
