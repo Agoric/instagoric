@@ -13,8 +13,8 @@ configMapGenerator:
       - resources/economy-proposals.json
   - name: entrypoint
     files:
-      - scripts/entrypoint.sh
-      - scripts/source.sh
+      - entrypoint.tar.gz
+      - entrypoint.sh
   - name: server
     files:
       - instagoric-server/lockdown.js
