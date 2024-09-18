@@ -11,6 +11,7 @@ resources:
   - ../../bases/ag-solo-manual
   - ../../bases/ag-solo-tasks
   - ../../bases/explorer
+  - ../../bases/hermes
 
 patches:
   - target:

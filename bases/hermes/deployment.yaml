@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: hermes
+
+spec:
+  selector:
+    matchLabels:
+      app: hermes
+
+  template:
+    metadata:
+      labels:
+        app: hermes
+
+    spec:
+      containers:
+        - command:
+            - /bin/bash
+            - -c
+            - |
+                hermes keys --help
+                sleep infinity
+          image: informalsystems/hermes:1.10.3
+          name: hermes-relayer
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 400Mi
