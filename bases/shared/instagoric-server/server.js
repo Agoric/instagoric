@@ -12,8 +12,11 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 const { details: X } = globalThis.assert;
 
 const BASE_AMOUNT = "25000000";
-const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT;
-const DELEGATE_AMOUNT = process.env.DELEGATE_AMOUNT;
+const CLIENT_AMOUNT =
+  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
+const DELEGATE_AMOUNT =
+  process.env.DELEGATE_AMOUNT ||
+  '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
 
 const COMMANDS = {
   "SEND_BLD/IBC": "send_bld_ibc",
@@ -513,8 +516,6 @@ const getDenoms = async () => {
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
 
-  const denomsInChain = await getDenoms();
-
   try {
     for await (const address of subscription) {
       console.log(`dequeued address ${address}`);
@@ -530,7 +531,7 @@ const startFaucetWorker = async () => {
         case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
 
-            [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['uist']));
+            [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
             if (!exitCode) {
               pollForProvisioning(address, clientType, txHash);
             }
@@ -538,17 +539,16 @@ const startFaucetWorker = async () => {
           break;
         }
         case COMMANDS["SEND_BLD/IBC"]: {
-          const ibcDenoms = denomsInChain.filter(denom => denom.startsWith('ibc'));
-          [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, ['ubld', ...ibcDenoms]));
+          [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
         }
         case COMMANDS["FUND_PROV_POOL"]: {
-          [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, denomsInChain));
+          [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT);
           break;
         }
 
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
-          [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT || constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
+          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
             break;
 
         }
