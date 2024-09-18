@@ -27,3 +27,6 @@ configMapGenerator:
   - name: vm-config
     files:
       - resources/decentral-test-vaults-config.json
+  - name: hermes
+    files:
+      - hermes.sh

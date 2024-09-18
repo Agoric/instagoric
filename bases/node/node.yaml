@@ -441,6 +441,15 @@ spec:
               cpu: 100m
               ephemeral-storage: 1Gi
               memory: 50Mi
+        - command:
+            - /bin/bash
+            - -c
+            - /usr/src/hermes/entrypoint.sh
+          image: informalsystems/hermes:1.10.3
+          name: hermes-relayer
+          volumeMounts:
+            - name: hermes
+              mountPath: /usr/src/hermes
       volumes:
         - name: otel-config
           configMap:
@@ -461,6 +470,9 @@ spec:
         - name: vm-config
           configMap:
             name: vm-config
+        - name: hermes
+          configMap:
+            name: hermes
   volumeClaimTemplates:
     - metadata:
         name: state
