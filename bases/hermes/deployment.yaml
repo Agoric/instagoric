@@ -24,11 +24,11 @@ spec:
 
                 set -o errexit -o errtrace
 
-                AGORIC_CHAIN_HERMES_ACCOUNT_MNEMONIC="orbit bench unit task food shock brand bracket domain regular warfare company announce wheel grape trust sphere boy doctor half guard ritual three ecology"
-                AGORIC_KEY_NAME="My Wallet"
+                AGORIC_CHAIN_HERMES_ACCOUNT_MNEMONIC="talk prepare desk time attract morning grow arrange buddy appear spring bring genuine deer any mercy lizard wife local runway tennis erode auction square"
+                AGORIC_KEY_NAME=hermes-agoric
                 OSMOSIS_CHAIN_ID="osmo-test-5"
-                OSMOSIS_CHAIN_HERMES_ACCOUNT_MNEMONIC="orbit bench unit task food shock brand bracket domain regular warfare company announce wheel grape trust sphere boy doctor half guard ritual three ecology"
-                OSMOSIS_KEY_NAME="My Wallet"
+                OSMOSIS_CHAIN_HERMES_ACCOUNT_MNEMONIC="offer twin elegant dice purity author clown woman pride draw biology elite pause broccoli frost drama screen angle ethics syrup heart predict flock blast"
+                OSMOSIS_KEY_NAME=hermes-osmosis
 
                 mkdir --parents $HOME/.hermes
                 touch "$HOME/.hermes/config.toml"
