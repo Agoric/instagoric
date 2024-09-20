@@ -29,7 +29,7 @@ export DD_ENV=$CHAIN_ID
 export DD_SERVICE="agd"
 export DD_AGENT_HOST=datadog.datadog.svc.cluster.local
 
-export MAINFORK_HEIGHT=16227216
+export MAINFORK_HEIGHT=16653629
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 
 export MAINNET_SNAPSHOT="agoric_15131589.tar.lz4"
@@ -525,6 +525,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@DD_TRACES@/${ddtracetarget}/" \
                 -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
                 -e "s/@DD_SITE@/${DD_SITE}/" \
+                -e "s/@NAMESPACE@/${NAMESPACE}/" \
                 "$HOME/instagoric-otel-config.yaml"
             (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> /state/otel.log  2>&1) &
     fi
@@ -860,6 +861,7 @@ case "$ROLE" in
         start_chain --iavl-disable-fastnode false
         ;;
     "follower")
+        (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
         if [[ ! -f "/state/follower-initialized" ]]; then
             cd /state/
             if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
