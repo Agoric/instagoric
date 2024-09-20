@@ -10,7 +10,7 @@ import multer from 'multer';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
-const upload = multer({ dest: 'uploads/' })
+const upload = multer({ dest: 'uploads/', preservePath: true });
 const { details: X } = globalThis.assert;
 
 const BASE_AMOUNT = "25000000";
@@ -776,12 +776,12 @@ publicapp.get('/install-bundle', async (req, res) => {
 </head>
 <body>
 
-    <h1>Upload a File</h1>
+    <h1>Install Bundle and Submit Core Eval Proposal</h1>
 
     <form id="uploadForm" action="/install-bundle" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" id="fileInput" required>
+        <input type="file" name="file" id="fileInput" multiple required>
         <br><br>
-        <button type="submit">Upload</button>
+        <button type="submit">Upload and Submit Proposal</button>
     </form>
 
     <script>
@@ -796,7 +796,10 @@ publicapp.get('/install-bundle', async (req, res) => {
                 return;
             }
 
-            formData.append('file', fileInput.files[0]);
+            // Loop through all selected files and append them to FormData
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files[]', fileInput.files[i]);
+            }
 
             fetch('/install-bundle', {
                 method: 'POST',
@@ -818,24 +821,62 @@ publicapp.get('/install-bundle', async (req, res) => {
   `);
 });
 
-publicapp.post('/install-bundle', upload.single('file'), async (req, res) => {
-  // Getting file from request and storing as temp file
-  const bundle = req.file?.filename;
-  if (!bundle) {
-    res.status(400).send('invalid form');
+publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
+  // Check if there are files in the request
+  const files = req.files;
+  if (!Array.isArray(files) || files.length === 0) {
+    res.status(400).send('No files uploaded');
     return;
   }
-  const result = await $`\
-    ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
-    --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
-    --chain-id=${chainId} -b block --yes
-  `;
-  if (result.exitCode !== 0) {
-    res.status(500).send(result.stderr);
-    return;
+
+  // Iterate through all files and process each one
+  for (const file of files) {
+    
+    const fileName = file.originalname;
+    const bundle = file.filename;
+
+    console.log("bundle", bundle)
+    
+    if (fileName.startsWith('b1-')) {
+    try {
+      const result = await $`\
+        ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
+        --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
+        --chain-id=${chainId} -b block --yes
+      `;
+
+      if (result.exitCode !== 0) {
+        res.status(500).send(`Error processing file ${bundle}: ${result.stderr}`);
+        return;
+      }
+
+      // const result2 = await $`${agBinary} query vstorage data bundles --chain-id=${chainId} agoriclocal --output json`;
+      // const bundles = JSON.parse(result2.stdout);
+      // console.log("bundles", bundles)
+    } catch (error) {
+      res.status(500).send(`Error processing file ${bundle}: ${error.message}`);
+      return;
+    }
   }
-  res.status(200).send('success');
+}
+
+const proposalPermitFile = files.filter(file => file.originalname.endsWith('permit.json')).map(file => file.filename)[0];
+const jsFile = files.filter(file => file.originalname.endsWith('.js')).map(file => file.filename)[0];
+
+console.log("proposalPermitFile", proposalPermitFile);
+console.log("jsFile", jsFile);
+
+const result = await $`${agBinary} tx gov submit-proposal swingset-core-eval uploads/${proposalPermitFile} uploads/${jsFile} --title="Vaults Core Eval" --description="Vaults Core Eval" --deposit=1000000ubld --gas=auto --gas-adjustment=1.2 --from ${FAUCET_KEYNAME} --chain-id ${chainId} --home=${agoricHome} --keyring-backend=test --keyring-dir=${agoricHome} --yes`
+
+if (result.exitCode !== 0) {
+  res.status(500).send(`Error submiting proposal ${result.stderr}`);
+  return;
+}
+
+  // If all files are processed successfully
+  res.status(200).send('All files uploaded and processed successfully');
 });
+
 
 faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`);
