@@ -11,6 +11,7 @@ import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
+const BASE_AMOUNT = "25000000";
 // Adding here to avoid ReferenceError for local server. Not needed for k8
 let CLUSTER_NAME;
 
@@ -19,6 +20,17 @@ const CLIENT_AMOUNT =
 const DELEGATE_AMOUNT =
   process.env.DELEGATE_AMOUNT ||
   '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
+
+const COMMANDS = {
+  "SEND_BLD/IBC": "send_bld_ibc",
+  "SEND_AND_PROVISION_IST": "send_ist_and_provision",
+  "FUND_PROV_POOL": "fund_provision_pool",
+  "CUSTOM_DENOMS_LIST": "custom_denoms_list",
+};
+
+
+const PROVISIONING_POOL_ADDR = 'agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346';
+  
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAUCET_KEYNAME =
@@ -493,6 +505,17 @@ const sendFunds = async (address, amount) => {
 };
 
 // Faucet worker.
+
+const constructAmountToSend = (amount, denoms) => denoms.map(denom => `${amount}${denom}`).join(',');
+
+const getDenoms = async () => {
+  // Not handling pagination as it is used for testing. Limit 100 shoud suffice
+
+  const result = await $`${agBinary} query bank total --limit=100 -o json`;
+  const output = JSON.parse(result.stdout.trim());
+  return output.supply.map((element) => element.denom);
+}
+
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
 
@@ -501,24 +524,36 @@ const startFaucetWorker = async () => {
       console.log(`dequeued address ${address}`);
       const request = addressToRequest.get(address);
 
-      const [response, command, clientType] = request;
+      const [response, command, clientType, denoms] = request;
       let exitCode = 1;
       let txHash = '';
 
       console.log(`Processing "${command}" for address "${address}"`);
 
       switch (command) {
-        case 'client': {
+        case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
+
             [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
-            if (!exitCode)
+            if (!exitCode) {
               pollForProvisioning(address, clientType, txHash);
+            }
           }
           break;
         }
-        case 'delegate': {
+        case COMMANDS["SEND_BLD/IBC"]: {
           [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
+        }
+        case COMMANDS["FUND_PROV_POOL"]: {
+          [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT);
+          break;
+        }
+
+        case COMMANDS["CUSTOM_DENOMS_LIST"]: {
+          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
+            break;
+
         }
         default: {
           console.log('unknown command');
@@ -551,30 +586,86 @@ privateapp.listen(privateport, () => {
   console.log(`privateapp listening on port ${privateport}`);
 });
 
-faucetapp.get('/', (req, res) => {
+
+faucetapp.get('/', async (req, res) => {
+
+  const denoms = await getDenoms();
+  let denomHtml = '';
+  denoms.forEach((denom) => {
+    denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
+  })
+  const denomsDropDownHtml =`<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`
+  
   const clientText = !AG0_MODE
-    ? `<input type="radio" id="client" name="command" value="client">
+    ? `<input type="radio" id="client" name="command" value=${COMMANDS["SEND_AND_PROVISION_IST"]} onclick="toggleRadio(event)">
 <label for="client">send IST and provision </label>
 <select name="clientType">
 <option value="SMART_WALLET">smart wallet</option>
 <option value="REMOTE_WALLET">ag-solo</option>
-</select>
-<br>`
+</select>`
     : '';
   res.send(
-    `<html><head><title>Faucet</title></head><body><h1>welcome to the faucet</h1>
+    `<html><head><title>Faucet</title>
+    <script>
+    function toggleRadio(event) {
+            var field = document.getElementById('denoms');
+
+            if (event.target.value === "${COMMANDS['CUSTOM_DENOMS_LIST']}") {        
+              field.style.display = 'block';
+            } else if (field.style.display === 'block') {  
+               field.style.display = 'none';
+            }
+      }
+    </script>
+    
+    <style>
+      
+      .dropdown {
+      overflow: scroll;
+      height: 120px;
+      width: fit-content;
+      }
+
+      .dropdown-content {
+        display: block;
+        background-color: #f9f9f9;
+        min-width: 160px;
+        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+      }
+
+      .dropdown-content label {
+        display: block;
+        margin-top: 10px;
+      }
+      
+      .denomsClass {
+        display: none;
+      }
+</style>
+    </head><body><h1>welcome to the faucet</h1>
 <form action="/go" method="post">
 <label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
-Request: <input type="radio" id="delegate" name="command" value="delegate" checked="checked">
-<label for="delegate">send BLD/IBC toy tokens</label> 
+Request: <input type="radio" id="delegate" name="command" value=${COMMANDS["SEND_BLD/IBC"]} checked="checked" onclick="toggleRadio(event)">
+<label for="delegate">send BLD/IBC toy tokens</label>
 ${clientText}
+
+<input type="radio" id=${COMMANDS["CUSTOM_DENOMS_LIST"]} name="command" value=${COMMANDS["CUSTOM_DENOMS_LIST"]} onclick="toggleRadio(event)"}>
+<label for=${COMMANDS["CUSTOM_DENOMS_LIST"]}> Select Custom Denoms </label>
+
+<br>
+
+
+<br>
+<div id='denoms' class="denomsClass"> 
+Denoms: ${denomsDropDownHtml} <br> <br>
+</div>
 <input type="submit" />
 </form>
 <br>
-<br>
 
-<form action="/go" method="post"><input id="address" name="address" type="hidden" value="agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" />
-<input type="hidden" name="command" value="delegate" /><input type="submit" value="fund provision pool" />
+<br>
+<form action="/go" method="post">
+<input type="hidden" name="command" value=${COMMANDS["FUND_PROV_POOL"]} /><input type="submit" value="fund provision pool" />
 </form>
 </body></html>
 `,
@@ -588,17 +679,18 @@ faucetapp.use(
 );
 
 faucetapp.post('/go', (req, res) => {
-  const { command, address, clientType } = req.body;
-
+  const { command, address, clientType, denoms } = req.body;
   if (
-    ((command === 'client' &&
+    ((command === COMMANDS["SEND_AND_PROVISION_IST"] &&
       ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === 'delegate') &&
-    typeof address === 'string' &&
+      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === COMMANDS["FUND_PROV_POOL"] ||
+      command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
+    (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&
     address.length === 45 &&
-    /^agoric1[0-9a-zA-Z]{38}$/.test(address)
+    /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
   ) {
-    addRequest(address, [res, command, clientType]);
+    addRequest(address, [res, command, clientType, denoms]);
   } else {
     res.status(403).send('invalid form');
   }
