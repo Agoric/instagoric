@@ -63,6 +63,8 @@ sed "$HOME_PATH/registry.yaml" \
  --in-place \
  --regexp-extended
 
-sleep infinity # TODO: Add faucet flows
+# TODO: Add faucet flows
+# Check address using agoric ibc-setup keys list --home="$HOME_PATH"
+sleep infinity
 # agoric ibc-setup ics20 --home="$HOME_PATH"
 # agoric ibc-relayer start --home="$HOME_PATH" --log-level=debug --poll=10
