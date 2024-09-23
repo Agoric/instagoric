@@ -3,15 +3,15 @@ kind: Kustomization
 # namespace: instagoric
 
 resources:
-  - ../../bases/shared
-  - ../../bases/primaryvalidator
-  - ../../bases/rpcnodes
-  - ../../bases/validators
-  - ../../bases/seed
   - ../../bases/ag-solo-manual
   - ../../bases/ag-solo-tasks
   - ../../bases/explorer
-  - ../../bases/hermes
+  - ../../bases/primaryvalidator
+  - ../../bases/relayer
+  - ../../bases/rpcnodes
+  - ../../bases/seed
+  - ../../bases/shared
+  - ../../bases/validators
 
 patches:
   - target:
