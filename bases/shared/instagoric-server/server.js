@@ -531,6 +531,7 @@ const startFaucetWorker = async () => {
       console.log(`Processing "${command}" for address "${address}"`);
 
       switch (command) {
+        case 'client':
         case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
 
@@ -541,15 +542,16 @@ const startFaucetWorker = async () => {
           }
           break;
         }
+        case 'delegate':
         case COMMANDS["SEND_BLD/IBC"]: {
           [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
         }
+        case 'delegate':
         case COMMANDS["FUND_PROV_POOL"]: {
           [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT);
           break;
         }
-
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
           [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
             break;
@@ -680,10 +682,11 @@ faucetapp.use(
 
 faucetapp.post('/go', (req, res) => {
   const { command, address, clientType, denoms } = req.body;
+
   if (
-    ((command === COMMANDS["SEND_AND_PROVISION_IST"] &&
+    ((command === COMMANDS["SEND_AND_PROVISION_IST"] || command === 'client' &&
       ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === 'delegate' || command === COMMANDS['SEND_BLD/IBC'] ||
       command === COMMANDS["FUND_PROV_POOL"] ||
       command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
     (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&
