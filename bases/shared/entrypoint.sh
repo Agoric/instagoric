@@ -59,6 +59,98 @@ resolved_basename=$(basename "$resolved_config")
 source_config="/config/network/$resolved_basename"
 test ! -e "$source_config" || cp "$source_config" "$resolved_config"
 
+backup_log_files_and_cleanup() {
+    SERVICE_ACCOUNT_JSON="/config/secrets/logs-backup.json"
+    if [ -f "$SERVICE_ACCOUNT_JSON" ]
+    then
+        BUCKET_NAME="agoric-chain-logs"
+        SCOPES="https://www.googleapis.com/auth/devstorage.read_write"
+        STATE_DIRECTORY_PATH=/state
+        TOKEN_URI="https://oauth2.googleapis.com/token"
+
+        base64url_encode() {
+            openssl base64 -e -A | \
+            tr '+/' '-_' | \
+            tr -d '='
+        }
+
+        CLIENT_EMAIL=$(
+            jq '.client_email' \
+            --raw-output < $SERVICE_ACCOUNT_JSON
+        )
+        PRIVATE_KEY=$(
+            jq '.private_key' \
+            --raw-output < $SERVICE_ACCOUNT_JSON | \
+            sed 's/\\n/\n/g'
+        )
+
+        HEADER='{"alg":"RS256","typ":"JWT"}'
+        ISSUER="$CLIENT_EMAIL"
+        AUDIENCE="$TOKEN_URI"
+        EXPIRATION=$(("$boottime"+3600))
+        ISSUED_AT="$boottime"
+
+        PAYLOAD=$(cat <<EOF
+{ "aud": "$AUDIENCE", "exp": $EXPIRATION, "iat": $ISSUED_AT, "iss": "$ISSUER", "scope": "$SCOPES" }
+EOF
+        )
+
+        HEADER_BASE64=$(echo -n "$HEADER" | base64url_encode)
+        PAYLOAD_BASE64=$(echo -n "$PAYLOAD" | base64url_encode)
+
+        SIGNATURE=$(
+            echo -n "${HEADER_BASE64}.${PAYLOAD_BASE64}" | \
+            openssl dgst -sha256 -sign <(echo -n "$PRIVATE_KEY") | \
+            base64url_encode
+        )
+
+        JWT="${HEADER_BASE64}.${PAYLOAD_BASE64}.${SIGNATURE}"
+
+        ACCESS_TOKEN=$(
+            curl $TOKEN_URI \
+            --data "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=$JWT" \
+            --header "Content-Type: application/x-www-form-urlencoded" --silent --request POST | \
+            jq --raw-output '.access_token'
+        )
+
+        upload_and_remove_file() {
+            FILE_PATH="$STATE_DIRECTORY_PATH/$1"
+            FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
+            OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
+
+            echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
+            curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
+            --header "Authorization: Bearer $ACCESS_TOKEN" --request POST --upload-file "$FILE_PATH"
+
+            # shellcheck disable=SC2181
+            if (($?))
+            then
+                echo "Failed to upload file '$FILE_PATH'"
+            else
+                echo "Deleting file '$FILE_PATH'"
+                rm --force "$FILE_PATH"
+            fi
+        }
+
+        # shellcheck disable=SC2207
+        FILES=($(
+            find "$STATE_DIRECTORY_PATH" -type f | \
+            grep --extended-regexp 'slogfile_[0-9]+\.json' | \
+            awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
+        ))
+
+        for file in "${FILES[@]}"
+        do
+            if [ "$STATE_DIRECTORY_PATH/$file" != "$SLOGFILE" ]
+            then
+                upload_and_remove_file "$file" &
+            fi
+        done
+    fi
+}
+
+backup_log_files_and_cleanup &
+
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
         echo "agd";
