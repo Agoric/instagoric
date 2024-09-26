@@ -811,6 +811,7 @@ case "$ROLE" in
         start_chain --iavl-disable-fastnode false
         ;;
     "follower")
+        (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
         if [[ ! -f "/state/follower-initialized" ]]; then
             cd /state/
             if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
