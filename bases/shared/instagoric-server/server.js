@@ -285,6 +285,7 @@ API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 Logs: <a href=${logsUrl}>https://${netname}.logs${domain}</a>
+VStorage: <a href=https://vstorage.agoric.net/?path=&endpoint=https://${netname}.rpc.agoric.net%3A443</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
