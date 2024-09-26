@@ -13,6 +13,7 @@ configMapGenerator:
       - resources/economy-proposals.json
   - name: entrypoint
     files:
+      - entrypoint.tar.gz
       - entrypoint.sh
   - name: server
     files:
