@@ -9,8 +9,11 @@ export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
 export WHALE_KEYNAME="whale"
 export CHAIN_ID=${CHAIN_ID:-instagoric-1}
 export AGORIC_HOME="/state/$CHAIN_ID"
-boottime="$(date '+%s')"
-export SLOGFILE="/state/slogfile_${boottime}.json"
+BOOT_TIME="$(date '+%s')"
+APP_LOG_FILE=/state/app_${BOOT_TIME}.log
+SERVER_LOG_FILE=/state/server_${BOOT_TIME}.log
+OTEL_LOG_FILE=/state/otel_${BOOT_TIME}.log
+export SLOGFILE="/state/slogfile_${BOOT_TIME}.json"
 export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
@@ -51,8 +54,6 @@ mkdir -p /state/cores
 chmod a+rwx /state/cores
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
 
-ln -sf "$SLOGFILE" /state/slogfile_current.json
-
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
 resolved_basename=$(basename "$resolved_config")
@@ -87,8 +88,8 @@ backup_log_files_and_cleanup() {
         HEADER='{"alg":"RS256","typ":"JWT"}'
         ISSUER="$CLIENT_EMAIL"
         AUDIENCE="$TOKEN_URI"
-        EXPIRATION=$(("$boottime"+3600))
-        ISSUED_AT="$boottime"
+        EXPIRATION=$(("$BOOT_TIME"+3600))
+        ISSUED_AT="$BOOT_TIME"
 
         PAYLOAD=$(cat <<EOF
 { "aud": "$AUDIENCE", "exp": $EXPIRATION, "iat": $ISSUED_AT, "iss": "$ISSUER", "scope": "$SCOPES" }
@@ -115,15 +116,13 @@ EOF
 
         upload_and_remove_file() {
             FILE_PATH="$STATE_DIRECTORY_PATH/$1"
-            FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
             OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
+            FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
 
             echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
-            curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
-            --header "Authorization: Bearer $ACCESS_TOKEN" --request POST --upload-file "$FILE_PATH"
+            HTTP_CODE=$(upload_file "$1")
 
-            # shellcheck disable=SC2181
-            if (($?))
+            if [ ! "$HTTP_CODE" -eq 200 ]
             then
                 echo "Failed to upload file '$FILE_PATH'"
             else
@@ -132,24 +131,52 @@ EOF
             fi
         }
 
+        upload_file() {
+            FILE_PATH="$STATE_DIRECTORY_PATH/$1"
+            OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
+
+            curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
+             --header "Authorization: Bearer $ACCESS_TOKEN" --output /dev/null --request POST \
+             --silent --upload-file "$FILE_PATH" --write-out "%{http_code}"
+        }
+
         # shellcheck disable=SC2207
         FILES=($(
             find "$STATE_DIRECTORY_PATH" -type f | \
-            grep --extended-regexp 'slogfile_[0-9]+\.json' | \
+            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|(slogfile_[0-9]+\.json)' | \
             awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
         ))
 
         for file in "${FILES[@]}"
         do
-            if [ "$STATE_DIRECTORY_PATH/$file" != "$SLOGFILE" ]
+            file_path="$STATE_DIRECTORY_PATH/$file"
+            if [ "$file_path" != "$APP_LOG_FILE" ] && [ "$file_path" != "$OTEL_LOG_FILE" ] && [ "$file_path" != "$SERVER_LOG_FILE" ] && [ "$file_path" != "$SLOGFILE" ]
             then
                 upload_and_remove_file "$file" &
+            fi
+        done
+
+        OLDER_FILES=(app.log server.log otel.log)
+
+        for file in "${OLDER_FILES[@]}"
+        do
+            file_path="$STATE_DIRECTORY_PATH/$file"
+            if [ -f "$file_path" ] && [ ! -h "$file_path" ]
+            then
+                backup_file_path=$(echo "$file_path" | awk -F'[_/.]' '{printf("%s_old.%s\n", $3, $4)}')
+                mv "$file_path" "$STATE_DIRECTORY_PATH/$backup_file_path"
+                upload_file "$backup_file_path" &
             fi
         done
     fi
 }
 
-backup_log_files_and_cleanup &
+backup_log_files_and_cleanup
+
+ln --force --symbolic "$APP_LOG_FILE" /state/app.log
+ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
+ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
+ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
@@ -430,7 +457,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start >> /state/server.log 2>&1
+        yarn start >> "$SERVER_LOG_FILE" 2>&1
         sleep 1
       done
     )
@@ -489,9 +516,9 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
+        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
     fi
 }
 
@@ -619,7 +646,7 @@ if [[ -z "$AG0_MODE" ]]; then
                 -e "s/@DD_SITE@/${DD_SITE}/" \
                 -e "s/@NAMESPACE@/${NAMESPACE}/" \
                 "$HOME/instagoric-otel-config.yaml"
-            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> /state/otel.log  2>&1) &
+            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> "$OTEL_LOG_FILE"  2>&1) &
     fi
 fi
 
@@ -835,7 +862,7 @@ case "$ROLE" in
         sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
         if [[ -z "$AG0_MODE" ]]; then 
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
         fi
         patch_validator_config
@@ -876,7 +903,7 @@ case "$ROLE" in
         if [[ -z "$AG0_MODE" ]]; then 
         
             if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${boottime}"
+                export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
             fi
             export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         fi
