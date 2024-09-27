@@ -120,24 +120,20 @@ EOF
             FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
 
             echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
-            HTTP_CODE=$(upload_file "$1")
+            HTTP_CODE=$(
+                curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
+                 --header "Authorization: Bearer $ACCESS_TOKEN" --output /dev/null --request POST \
+                 --silent --upload-file "$FILE_PATH" --write-out "%{http_code}"
+            )
 
-            if [ ! "$HTTP_CODE" -eq 200 ]
+            # shellcheck disable=SC2181
+            if (($?)) || [ ! "$HTTP_CODE" -eq 200 ]
             then
                 echo "Failed to upload file '$FILE_PATH'"
             else
                 echo "Deleting file '$FILE_PATH'"
                 rm --force "$FILE_PATH"
             fi
-        }
-
-        upload_file() {
-            FILE_PATH="$STATE_DIRECTORY_PATH/$1"
-            OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
-
-            curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
-             --header "Authorization: Bearer $ACCESS_TOKEN" --output /dev/null --request POST \
-             --silent --upload-file "$FILE_PATH" --write-out "%{http_code}"
         }
 
         # shellcheck disable=SC2207
@@ -165,7 +161,7 @@ EOF
             then
                 backup_file_path=$(echo "$file_path" | awk -F'[_/.]' '{printf("%s_old.%s\n", $3, $4)}')
                 mv "$file_path" "$STATE_DIRECTORY_PATH/$backup_file_path"
-                upload_file "$backup_file_path" &
+                upload_and_remove_file "$backup_file_path" &
             fi
         done
     fi
