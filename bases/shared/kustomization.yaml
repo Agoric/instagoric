@@ -13,7 +13,9 @@ configMapGenerator:
       - resources/economy-proposals.json
   - name: entrypoint
     files:
+      - cron.sh
       - entrypoint.sh
+      - restart-pods.sh
   - name: server
     files:
       - instagoric-server/lockdown.js

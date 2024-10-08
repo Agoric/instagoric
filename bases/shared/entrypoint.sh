@@ -870,6 +870,7 @@ case "$ROLE" in
             ( wait_till_syncup_and_fund ) &
         fi
 
+        /bin/bash /entrypoint/cron.sh
         start_chain
         ;;
 
@@ -994,6 +995,8 @@ case "$ROLE" in
             sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
             touch /state/follower-initialized
         fi
+
+        /bin/bash /entrypoint/cron.sh
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
