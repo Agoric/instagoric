@@ -258,8 +258,10 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
-  const logsQuery = { "62l": { "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
-  const logsUrl = `https://${netname}.logs${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const gcloudLoggingDatasource = 'P470A85C5170C7A1D'
+  const logsQuery = { "62l": { "datasource": gcloudLoggingDatasource, "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
+  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -284,7 +286,8 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href=${logsUrl}>https://${netname}.logs${domain}</a>
+Logs: <a href=${logsUrl}>https://monitor${domain}</a>
+Monitoring Dashboard: <a href=${dashboardUrl}>https://monitor${domain}</a>
 VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
 
 UIs:
