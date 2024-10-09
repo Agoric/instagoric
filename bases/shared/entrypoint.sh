@@ -21,6 +21,7 @@ export WHALE_DERIVATIONS=${WHALE_DERIVATIONS:-100}
 export MODIFIED_BOOTSTRAP_PATH="/usr/src/agoric-sdk/packages/vats/modified-bootstrap.json"
 export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"
 export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
+export OTEL_VERSION=0.96.0
 mkdir -p $AGORIC_HOME
 if [[ -z "$AG0_MODE" ]]; then 
 version=$(cat /usr/src/agoric-sdk/packages/solo/public/git-revision.txt | tr '\n' ' ' )
@@ -609,42 +610,56 @@ fork_setup() {
     
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
+}
 
-    # sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
+start_otel_server() {
+    if [ -z "$ENABLE_TELEMETRY" ]
+    then
+        echo "skipping telemetry since ENABLE_TELEMETRY is not set"
+        unset OTEL_EXPORTER_OTLP_ENDPOINT
+        unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    elif [ -f "$USE_OTEL_CONFIG" ]
+    then
+        cd "$HOME" || return
 
-    # For importing a exported state only
-    # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml
+        container_id=$(
+            grep systemd < /proc/self/cgroup | \
+            head --lines 1 | \
+            cut --delimiter / --fields 4
+        )
+        ARCHITECTURE="$(dpkg --print-architecture)"
+
+        ddtracetarget=""
+        if [[ $DD_TRACE_ENABLED == "true" ]]; then
+            ddtracetarget=", otlphttp/datadogagent"
+        fi
+
+        echo "starting telemetry collector"
+        export CONTAINER_ID="$container_id"
+
+        OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
+        cp "$USE_OTEL_CONFIG" "$OTEL_CONFIG"
+
+        sed "$OTEL_CONFIG" \
+         --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
+         --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
+         --expression "s/@DD_API_KEY@/${DD_API_KEY}/" \
+         --expression "s/@DD_SITE@/${DD_SITE}/" \
+         --expression "s|@DD_TRACES@|${ddtracetarget}|" \
+         --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
+         --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
+         --expression "s/@NAMESPACE@/${NAMESPACE}/" \
+         --in-place
+
+        curl "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${ARCHITECTURE}.tar.gz" \
+         --location --output otel.tgz
+        tar --extract --file otel.tgz --gzip
+        "$HOME/otelcol-contrib" --config "$OTEL_CONFIG" >> "$OTEL_LOG_FILE" 2>&1
+    fi
 }
 
 ###
-if [[ -z "$AG0_MODE" ]]; then 
-    if [[ -z "${ENABLE_TELEMETRY}" ]]; then
-    echo "skipping telemetry since ENABLE_TELEMETRY is not set"
-    unset OTEL_EXPORTER_OTLP_ENDPOINT
-    unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-    elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
-            ddtracetarget=""
-            if [[ $DD_TRACE_ENABLED == "true" ]]; then
-                ddtracetarget=",\"otlphttp\\/datadogagent\""
-            fi
-            echo "starting telemetry collector"
-            OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
-            cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
-            container_id=$(cat /proc/self/cgroup | grep systemd | head -1 | cut -d/ -f4)
-            export CONTAINER_ID="$container_id"
-
-            sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
-                -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-                -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
-                -e "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-                -e "s/@DD_TRACES@/${ddtracetarget}/" \
-                -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
-                -e "s/@DD_SITE@/${DD_SITE}/" \
-                -e "s/@NAMESPACE@/${NAMESPACE}/" \
-                "$HOME/instagoric-otel-config.yaml"
-            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> "$OTEL_LOG_FILE"  2>&1) &
-    fi
-fi
+start_otel_server &
 
 
 echo "ROLE: $ROLE"
