@@ -13,7 +13,7 @@ apt-get install cron --yes > /dev/null
 touch "$CRON_FILE_PATH" "$CRON_LOGS_FILE_PATH"
 
 cat <<EOF >> "$CRON_FILE_PATH"
-0 */6 * * * $(whoami) export ROLE="$ROLE" && $(which bash) $DIRECTORY_PATH/restart-pods.sh > "$CRON_LOGS_FILE_PATH" 2>&1
+0 0 * * * $(whoami) export ROLE="$ROLE" && $(which bash) $DIRECTORY_PATH/restart-pods.sh > "$CRON_LOGS_FILE_PATH" 2>&1
 
 EOF
 
