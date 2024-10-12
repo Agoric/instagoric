@@ -3,6 +3,7 @@
 set -eux
 
 CERTIFICATE_FILE=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+INTERVAL=$((60 * 60))
 NAMESPACE=$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)
 OUTPUT_FILE="/tmp/$(date '+%s').json"
 TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
@@ -25,7 +26,7 @@ delete_pod() {
 delete_pods() {
     for pod_name in "${LINKED_PODNAMES[@]}"; do
         delete_pod "$pod_name"
-        sleep 300
+        sleep "$INTERVAL"
     done
     delete_pod "$CURRENT_PODNAME"
 }
