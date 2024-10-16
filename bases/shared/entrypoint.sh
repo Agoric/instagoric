@@ -885,6 +885,7 @@ case "$ROLE" in
             ( wait_till_syncup_and_fund ) &
         fi
 
+        /bin/bash /entrypoint/cron.sh
         start_chain
         ;;
 
@@ -981,6 +982,9 @@ case "$ROLE" in
     "fork1")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric1
+
+        /bin/bash /entrypoint/cron.sh
+
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain --iavl-disable-fastnode false
         ;;
@@ -1009,6 +1013,8 @@ case "$ROLE" in
             sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
             touch /state/follower-initialized
         fi
+
+        /bin/bash /entrypoint/cron.sh
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
