@@ -286,8 +286,8 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href=${logsUrl}>https://monitor${domain}</a>
-Monitoring Dashboard: <a href=${dashboardUrl}>https://monitor${domain}</a>
+Logs: <a href=${logsUrl}>Click Here</a>
+Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
 VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
 
 UIs:
