@@ -64,7 +64,9 @@ if (FAKE) {
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
   await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  process.env.AGORIC_HOME = tmpDir;
+  if(!process.env.AGORIC_HOME){
+    process.env.AGORIC_HOME = tmpDir;
+  }
 }
 
 const agoricHome = process.env.AGORIC_HOME;
