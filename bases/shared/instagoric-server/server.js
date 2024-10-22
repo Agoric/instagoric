@@ -3,54 +3,44 @@ import './lockdown.js';
 
 import process from 'process';
 import express from 'express';
-import https from 'https';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
+import {
+  getTransactionStatus,
+  sendFunds,
+  makeKubernetesRequest,
+  getDockerImage,
+} from './utils.js';
+import {
+  AG0_MODE,
+  COMMANDS,
+  BASE_AMOUNT,
+  CLIENT_AMOUNT,
+  DELEGATE_AMOUNT,
+  PROVISIONING_POOL_ADDR,
+  TRANSACTION_STATUS,
+  DOCKERTAG,
+  DOCKERIMAGE,
+  NETNAME,
+  NETDOMAIN,
+  agBinary,
+  FAUCET_KEYNAME,
+  podname,
+  INCLUDE_SEED,
+  NODE_ID,
+  RPC_PORT,
+  agoricHome,
+  chainId,
+  namespace,
+  FAKE,
+} from './constants.js';
+import { homeRoute as faucetAppHomeRoute } from './api/faucet-app/homeHandler.js';
+import { homeRoute as publicAppHomeRoute } from './api/public-app/homeHandler.js';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
-const BASE_AMOUNT = "25000000";
-// Adding here to avoid ReferenceError for local server. Not needed for k8
-let CLUSTER_NAME;
-
-const CLIENT_AMOUNT =
-  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
-const DELEGATE_AMOUNT =
-  process.env.DELEGATE_AMOUNT ||
-  '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
-
-const COMMANDS = {
-  "SEND_BLD/IBC": "send_bld_ibc",
-  "SEND_AND_PROVISION_IST": "send_ist_and_provision",
-  "FUND_PROV_POOL": "fund_provision_pool",
-  "CUSTOM_DENOMS_LIST": "custom_denoms_list",
-};
-
-
-const PROVISIONING_POOL_ADDR = 'agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346';
-  
-const DOCKERTAG = process.env.DOCKERTAG; // Optional.
-const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
-const FAUCET_KEYNAME =
-  process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
-const NETNAME = process.env.NETNAME || 'devnet';
-const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
-const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
-const agBinary = AG0_MODE ? 'ag0' : 'agd';
-const podname = process.env.POD_NAME || 'validator-primary';
-const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
-const NODE_ID =
-  process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
-const RPC_PORT = 26657;
-const TRANSACTION_STATUS = {
-  FAILED: 1000,
-  NOT_FOUND: 1001,
-  SUCCESSFUL: 1002,
-};
-
-const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
   console.log('FAKE MODE');
   const tmpDir = await new Promise((resolve, reject) => {
@@ -67,60 +57,13 @@ if (FAKE) {
   process.env.AGORIC_HOME = tmpDir;
 }
 
-const agoricHome = process.env.AGORIC_HOME;
 assert(agoricHome, X`AGORIC_HOME not set`);
-
-const chainId = process.env.CHAIN_ID;
 assert(chainId, X`CHAIN_ID not set`);
-
-let dockerImage;
-
-const namespace =
-  process.env.NAMESPACE ||
-  fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', {
-    encoding: 'utf8',
-    flag: 'r',
-  });
-
-let revision;
-if (FAKE) {
-  revision = 'fake_revision';
-} else {
-  revision =
-    process.env.AG0_MODE === 'true'
-      ? 'ag0'
-      : fs.readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
-          encoding: 'utf8',
-          flag: 'r',
-        }).trim();
-}
 
 /**
  * @param {string} relativeUrl
  * @returns {Promise<any>}
  */
-const makeKubernetesRequest = async relativeUrl => {
-  const ca = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
-    'utf8',
-  );
-  const token = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/token',
-    'utf8',
-  );
-  const url = new URL(
-    relativeUrl,
-    'https://kubernetes.default.svc.cluster.local',
-  );
-  const response = await fetch(url.href, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-    agent: new https.Agent({ ca }),
-  });
-  return response.json();
-};
 
 const getMetricsRequest = async relativeUrl => {
   const url = new URL('http://localhost:26661/metrics');
@@ -255,50 +198,7 @@ publicapp.use(logReq);
 privateapp.use(logReq);
 faucetapp.use(logReq);
 
-publicapp.get('/', (req, res) => {
-  const domain = NETDOMAIN;
-  const netname = NETNAME;
-  const gcloudLoggingDatasource = 'P470A85C5170C7A1D'
-  const logsQuery = { "62l": { "datasource": gcloudLoggingDatasource, "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
-  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
-  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`
-  res.send(`
-<html><head><title>Instagoric</title></head><body><pre>
-██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
-██║████╗  ██║██╔════╝╚══██╔══╝██╔══██╗██╔════╝ ██╔═══██╗██╔══██╗██║██╔════╝
-██║██╔██╗ ██║███████╗   ██║   ███████║██║  ███╗██║   ██║██████╔╝██║██║
-██║██║╚██╗██║╚════██║   ██║   ██╔══██║██║   ██║██║   ██║██╔══██╗██║██║
-██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
-╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
-
-Chain: ${chainId}${process.env.NETPURPOSE !== undefined
-      ? `\nPurpose: ${process.env.NETPURPOSE}`
-      : ''
-    }
-Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]
-    }
-Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
-Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
-Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
-RPC: <a href="https://${netname}.rpc${domain}">https://${netname}.rpc${domain}</a>
-gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain}</a>
-API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
-Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
-Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href=${logsUrl}>Click Here</a>
-Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
-VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
-
-UIs:
-Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
-Main-branch Vaults: <a href="https://dapp-inter-test.pages.dev/?network=${netname}">https://dapp-inter-test.pages.dev/?network=${netname}</a>
-
-----
-See more at <a href="https://agoric.com">https://agoric.com</a>
-</pre></body></html>
-  `);
-});
+publicapp.get('/', publicAppHomeRoute);
 
 publicapp.get('/network-config', async (req, res) => {
   res.setHeader('Content-type', 'text/plain;charset=UTF-8');
@@ -335,7 +235,8 @@ volumes:
   ag-solo-state:
 `;
 
-publicapp.get('/docker-compose.yml', (req, res) => {
+publicapp.get('/docker-compose.yml', async (req, res) => {
+  let dockerImage = await getDockerImage(namespace, podname, FAKE);
   res.setHeader(
     'Content-disposition',
     'attachment; filename=docker-compose.yml',
@@ -408,35 +309,7 @@ const addRequest = (address, request) => {
   publication.updateState(address);
 };
 
-/**
- * Returns the status of a transaction against hash `txHash`.
- * The status is one of the values from `TRANSACTION_STATUS`
- * @param {string} txHash
- * @returns {Promise<number>}
- */
-const getTransactionStatus = async txHash => {
-  let { exitCode, stderr, stdout } = await nothrow($`\
-    ${agBinary} query tx ${txHash} \
-    --chain-id=${chainId} \
-    --home=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --type=hash \
-  `);
-  exitCode = exitCode ?? 1;
 
-  // This check is brittle as this can also happen in case
-  // an invalid txhash was provided. So there is no reliable
-  // distinction between the case of invalid txhash and a
-  // transaction currently in the mempool. We could use search
-  // endpoint but that seems overkill to cover a case where
-  // the only the deliberate use of invalid hash can effect the user
-  if (exitCode && stderr.includes(`tx (${txHash}) not found`))
-    return TRANSACTION_STATUS.NOT_FOUND;
-
-  const code = Number(JSON.parse(stdout).code);
-  return code ? TRANSACTION_STATUS.FAILED : TRANSACTION_STATUS.SUCCESSFUL;
-};
 
 /**
  * @param {string} address
@@ -479,46 +352,13 @@ const provisionAddress = async (address, clientType) => {
     );
 };
 
-/**
- * Send funds to `address`.
- * It only waits for the transaction
- * checks and doesn't wait for the
- * transaction to actually be included
- * in a block. The returned transaction
- * hash can be used to get the current status
- * of the transaction later
- * @param {string} address
- * @param {string} amount
- * @returns {Promise<[number, string]>}
- */
-const sendFunds = async (address, amount) => {
-  let { exitCode, stdout } = await nothrow($`\
-    ${agBinary} tx bank send ${FAUCET_KEYNAME} ${address} ${amount} \
-    --broadcast-mode=sync \
-    --chain-id=${chainId} \
-    --keyring-backend=test \
-    --keyring-dir=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --yes \
-  `);
-  exitCode = exitCode ?? 1;
 
-  if (exitCode) return [exitCode, ''];
-  return [exitCode, String(JSON.parse(stdout).txhash)];
-};
 
 // Faucet worker.
 
 const constructAmountToSend = (amount, denoms) => denoms.map(denom => `${amount}${denom}`).join(',');
 
-const getDenoms = async () => {
-  // Not handling pagination as it is used for testing. Limit 100 shoud suffice
 
-  const result = await $`${agBinary} query bank total --limit=100 -o json`;
-  const output = JSON.parse(result.stdout.trim());
-  return output.supply.map((element) => element.denom);
-}
 
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
@@ -593,90 +433,7 @@ privateapp.listen(privateport, () => {
 });
 
 
-faucetapp.get('/', async (req, res) => {
-
-  const denoms = await getDenoms();
-  let denomHtml = '';
-  denoms.forEach((denom) => {
-    denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
-  })
-  const denomsDropDownHtml =`<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`
-  
-  const clientText = !AG0_MODE
-    ? `<input type="radio" id="client" name="command" value=${COMMANDS["SEND_AND_PROVISION_IST"]} onclick="toggleRadio(event)">
-<label for="client">send IST and provision </label>
-<select name="clientType">
-<option value="SMART_WALLET">smart wallet</option>
-<option value="REMOTE_WALLET">ag-solo</option>
-</select>`
-    : '';
-  res.send(
-    `<html><head><title>Faucet</title>
-    <script>
-    function toggleRadio(event) {
-            var field = document.getElementById('denoms');
-
-            if (event.target.value === "${COMMANDS['CUSTOM_DENOMS_LIST']}") {        
-              field.style.display = 'block';
-            } else if (field.style.display === 'block') {  
-               field.style.display = 'none';
-            }
-      }
-    </script>
-    
-    <style>
-      
-      .dropdown {
-      overflow: scroll;
-      height: 120px;
-      width: fit-content;
-      }
-
-      .dropdown-content {
-        display: block;
-        background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-      }
-
-      .dropdown-content label {
-        display: block;
-        margin-top: 10px;
-      }
-      
-      .denomsClass {
-        display: none;
-      }
-</style>
-    </head><body><h1>welcome to the faucet</h1>
-<form action="/go" method="post">
-<label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
-Request: <input type="radio" id="delegate" name="command" value=${COMMANDS["SEND_BLD/IBC"]} checked="checked" onclick="toggleRadio(event)">
-<label for="delegate">send BLD/IBC toy tokens</label>
-${clientText}
-
-<input type="radio" id=${COMMANDS["CUSTOM_DENOMS_LIST"]} name="command" value=${COMMANDS["CUSTOM_DENOMS_LIST"]} onclick="toggleRadio(event)"}>
-<label for=${COMMANDS["CUSTOM_DENOMS_LIST"]}> Select Custom Denoms </label>
-
-<br>
-
-
-<br>
-<div id='denoms' class="denomsClass"> 
-Denoms: ${denomsDropDownHtml} <br> <br>
-</div>
-<input type="submit" />
-</form>
-<br>
-
-<br>
-<form action="/go" method="post">
-<input type="hidden" name="command" value=${COMMANDS["FUND_PROV_POOL"]} /><input type="submit" value="fund provision pool" />
-</form>
-</body></html>
-`,
-  );
-});
+faucetapp.get('/', faucetAppHomeRoute);
 
 faucetapp.use(
   express.urlencoded({
@@ -774,14 +531,6 @@ faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`);
 });
 
-if (FAKE) {
-  dockerImage = 'asdf:unknown';
-} else {
-  const statefulSet = await makeKubernetesRequest(
-    `/apis/apps/v1/namespaces/${namespace}/statefulsets/${podname}`,
-  );
-  dockerImage = statefulSet.spec.template.spec.containers[0].image;
-}
 publicapp.listen(publicport, () => {
   console.log(`publicapp listening on port ${publicport}`);
 });
