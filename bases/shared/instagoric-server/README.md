@@ -19,3 +19,4 @@ You can adjust and pass the following environment variables if needed:
 - `AG0_MODE`: Determines which Agoric binary is used to interact with the blockchain:
   - Set to `false` (default) to use the `agd` binary, which is typically used for standard operations on the Agoric chain.
   - Set to `true` to use the `ag0` binary, if your environment or setup requires it
+- `FAUCET_KEYNAME`: The wallet address used for sending tokens and provisioning.
