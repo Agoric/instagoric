@@ -627,16 +627,18 @@ faucetapp.get('/', async (req, res) => {
     <style>
       
       .dropdown {
-      overflow: scroll;
-      height: 120px;
-      width: fit-content;
+        overflow: scroll;
+        height: 120px;
+        width: fit-content;
       }
 
       .dropdown-content {
         display: block;
         background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        min-width: 160px; 
+        border: 1px solid #ccc;
+        padding: 10px;
+        box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
       }
 
       .dropdown-content label {
