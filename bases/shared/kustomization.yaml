@@ -16,6 +16,8 @@ configMapGenerator:
       - cron.sh
       - entrypoint.sh
       - restart-pods.sh
+      - context-aware-slog.js
+      - package.json
   - name: server
     files:
       - instagoric-server/lockdown.js
