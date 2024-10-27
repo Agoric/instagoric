@@ -18,6 +18,7 @@ configMapGenerator:
       - restart-pods.sh
       - context-aware-slog.js
       - package.json
+      - otel-context-aware-slog.js
   - name: server
     files:
       - instagoric-server/lockdown.js

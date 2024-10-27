@@ -521,7 +521,10 @@ start_chain () {
         cp /entrypoint/context-aware-slog.js /usr/src/agoric-sdk/node_modules/@agoric/telemetry/src/context-aware-slog.js
         cp /entrypoint/context-aware-slog.js /usr/src/agoric-sdk/packages/cosmic-swingset/node_modules/@agoric/telemetry/src/context-aware-slog.js
 
-        (cd /usr/src/agoric-sdk && OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318" SLOGSENDER="@agoric/telemetry/src/context-aware-slog.js" node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
+        cp /entrypoint/otel-context-aware-slog.js /usr/src/agoric-sdk/node_modules/@agoric/telemetry/src/otel-context-aware-slog.js
+        cp /entrypoint/otel-context-aware-slog.js /usr/src/agoric-sdk/packages/cosmic-swingset/node_modules/@agoric/telemetry/src/otel-context-aware-slog.js
+
+        (cd /usr/src/agoric-sdk && OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:4318" SLOGSENDER="@agoric/telemetry/src/otel-context-aware-slog.js" node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
     fi
