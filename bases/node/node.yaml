@@ -312,21 +312,6 @@ spec:
               name: prom
             - containerPort: 1317
               name: api
-          # Can we somehow detect errors that are recoverable by restarting the node?
-          # My feeling is that the only one of these would be if the daemon exits, which
-          # is already handled by normal container restarts.
-          # startupProbe:
-          #   httpGet:
-          #     path: /health
-          #     port: rpc
-          #   failureThreshold: 120
-          #   periodSeconds: 10
-          # livenessProbe:
-          #   httpGet:
-          #     path: /health
-          #     port: rpc
-          #   failureThreshold: 3
-          #   periodSeconds: 10
           readinessProbe:
             exec:
               command:
@@ -369,28 +354,6 @@ spec:
               cpu: 100m
               ephemeral-storage: 5Gi
               memory: 2Gi
-        # - name: grpc-hc
-        #   image: docker.io/salrashid123/grpc_health_proxy:1.0.0
-        #   args: 
-        #     - '--grpcaddr=localhost:9090'
-        #     - '--http-listen-addr=0.0.0.0:8080'
-        #     - '--logtostderr=1'
-        #   ports:
-        #     - containerPort: 8080
-        #       name: grpc-hc
-        #   # FIXME: Help, please, Ari!
-        #   # Warning: Autopilot increased resource requests for StatefulSet
-        #   # instagoric/validator to meet requirements.  See
-        #   # http://g.co/gke/autopilot-resources.
-        #   resources:
-        #     limits:
-        #       cpu: 500m
-        #       ephemeral-storage: 1Gi
-        #       memory: 3Gi
-        #     requests:
-        #       cpu: 250m
-        #       ephemeral-storage: 1Gi
-        #       memory: 1Gi
         - name: log-app
           image: busybox:latest
           args: [/bin/sh, -c, 'tail -n 10 -F /state/app.log']
@@ -410,22 +373,6 @@ spec:
         - name: log-slog
           image: busybox:latest
           args: [/bin/sh, -c, 'tail -n 10 -F /state/slogfile_current.json']
-          volumeMounts:
-          - name: state
-            mountPath: /state
-            readOnly: true
-          resources:
-            limits:
-              cpu: 100m
-              ephemeral-storage: 1Gi
-              memory: 50Mi
-            requests:
-              cpu: 100m
-              ephemeral-storage: 1Gi
-              memory: 50Mi
-        - name: log-otel
-          image: busybox:latest
-          args: [/bin/sh, -c, 'tail -n 10 -F /state/otel.log']
           volumeMounts:
           - name: state
             mountPath: /state
