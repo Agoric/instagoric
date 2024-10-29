@@ -1,0 +1,33 @@
+services:
+  instagoric-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - 8001:8001
+      - 8002:8002
+      - 8003:8003
+    environment:
+      - AGORIC_HOME=~/.agoric
+      - CHAIN_ID=agoriclocal
+      - FAKE=true
+      - BASE_AMOUNT=25000000
+      - CLUSTER_NAME
+      - CLIENT_AMOUNT=${CLIENT_AMOUNT:-25000000uist,25000000ibc/toyusdc}
+      - DELEGATE_AMOUNT=${DELEGATE_AMOUNT:-75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie}
+      - DOCKERTAG
+      - DOCKERIMAGE
+      - FAUCET_KEYNAME
+      - NETNAME
+      - NETDOMAIN
+      - AG0_MODE
+      - POD_NAME
+      - INCLUDE_SEED
+      - NODE_ID
+      - RPC_PORT
+      - NAMESPACE
+    volumes:
+      - .:/usr/instagoric-server
+    entrypoint: ['/bin/bash', '-c']
+    command: >
+      'yarn start'
