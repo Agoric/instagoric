@@ -3,9 +3,8 @@ import './lockdown.js';
 
 import process from 'process';
 import express from 'express';
-import https from 'https';
 import tmp from 'tmp';
-import { $, fetch, fs, nothrow, sleep } from 'zx';
+import { $, fs, sleep } from 'zx';
 import {
   BASE_AMOUNT,
   CLIENT_AMOUNT,
@@ -17,19 +16,27 @@ import {
   FAUCET_KEYNAME,
   NETNAME,
   NETDOMAIN,
-  RPC_PORT,
   TRANSACTION_STATUS,
   AG0_MODE,
   agBinary,
-  podname,
-  INCLUDE_SEED,
-  NODE_ID,
   FAKE,
-  agoricHome,
   chainId,
   namespace,
-  revision
+  revision,
+  ipsCache,
+  networkConfig,
+  metricsCache,
+  dockerImage
 } from './constants.js';
+import {
+  dockerComposeYaml,
+  getTransactionStatus,
+  pollForProvisioning,
+  sendFunds,
+  constructAmountToSend,
+  getDenoms,
+  logRequest
+} from './utils.js';
 import { makeSubscriptionKit } from '@agoric/notifier';
 
 // Adding here to avoid ReferenceError for local server. Not needed for k8
@@ -51,170 +58,17 @@ if (FAKE) {
   process.env.AGORIC_HOME = tmpDir;
 }
 
-
-let dockerImage;
-
-
-
-/**
- * @param {string} relativeUrl
- * @returns {Promise<any>}
- */
-const makeKubernetesRequest = async relativeUrl => {
-  const ca = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/ca.crt',
-    'utf8',
-  );
-  const token = await fs.readFile(
-    '/var/run/secrets/kubernetes.io/serviceaccount/token',
-    'utf8',
-  );
-  const url = new URL(
-    relativeUrl,
-    'https://kubernetes.default.svc.cluster.local',
-  );
-  const response = await fetch(url.href, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      Accept: 'application/json',
-    },
-    agent: new https.Agent({ ca }),
-  });
-  return response.json();
-};
-
-const getMetricsRequest = async relativeUrl => {
-  const url = new URL('http://localhost:26661/metrics');
-  const response = await fetch(url.href);
-  return response.text();
-};
-
-// eslint-disable-next-line no-unused-vars
-async function getNodeId(node) {
-  const response = await fetch(
-    `http://${node}.${namespace}.svc.cluster.local:26657/status`,
-  );
-  return response.json();
-}
-
-async function getServices() {
-  if (FAKE) {
-    return new Map([
-      ['validator-primary-ext', '1.1.1.1'],
-      ['seed-ext', '1.1.1.2'],
-    ]);
-  }
-  const services = await makeKubernetesRequest(
-    `/api/v1/namespaces/${namespace}/services/`,
-  );
-  const map1 = new Map();
-  for (const item of services.items) {
-    const ingress = item.status?.loadBalancer?.ingress;
-    if (ingress?.length > 0) {
-      map1.set(item.metadata.name, ingress[0].ip);
-    }
-  }
-  return map1;
-}
-
-const getNetworkConfig = async () => {
-  const svc = await getServices();
-  const file = FAKE
-    ? './resources/network_info.json'
-    : '/config/network/network_info.json';
-  const buf = await fs.readFile(file, 'utf8');
-  const ap = JSON.parse(buf);
-  ap.chainName = chainId;
-  ap.gci = `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`;
-  ap.peers[0] = ap.peers[0].replace(
-    'validator-primary.instagoric.svc.cluster.local',
-    svc.get('validator-primary-ext') ||
-    `${podname}.${namespace}.svc.cluster.local`,
-  );
-  ap.peers[0] = ap.peers[0].replace(
-    'fb86a0993c694c981a28fa1ebd1fd692f345348b',
-    `${NODE_ID}`,
-  );
-  ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
-  ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
-  if (INCLUDE_SEED === 'yes') {
-    ap.seeds[0] = ap.seeds[0].replace(
-      'seed.instagoric.svc.cluster.local',
-      svc.get('seed-ext') || `seed.${namespace}.svc.cluster.local`,
-    );
-  } else {
-    ap.seeds = [];
-  }
-
-  return JSON.stringify(ap);
-};
-class DataCache {
-  constructor(fetchFunction, minutesToLive = 10) {
-    this.millisecondsToLive = minutesToLive * 60 * 1000;
-    this.fetchFunction = fetchFunction;
-    this.cache = null;
-    this.getData = this.getData.bind(this);
-    this.resetCache = this.resetCache.bind(this);
-    this.isCacheExpired = this.isCacheExpired.bind(this);
-    this.fetchDate = new Date(0);
-  }
-
-  isCacheExpired() {
-    return (
-      this.fetchDate.getTime() + this.millisecondsToLive < new Date().getTime()
-    );
-  }
-
-  getData() {
-    if (!this.cache || this.isCacheExpired()) {
-      console.log('fetch');
-      return this.fetchFunction().then(data => {
-        this.cache = data;
-        this.fetchDate = new Date();
-        return data;
-      });
-    } else {
-      console.log('cache hit');
-
-      return Promise.resolve(this.cache);
-    }
-  }
-
-  resetCache() {
-    this.fetchDate = new Date(0);
-  }
-}
-const ipsCache = new DataCache(getServices, 0.1);
-const networkConfig = new DataCache(getNetworkConfig, 0.5);
-const metricsCache = new DataCache(getMetricsRequest, 0.1);
-
 const publicapp = express();
 const privateapp = express();
 const faucetapp = express();
 const publicport = 8001;
 const privateport = 8002;
 const faucetport = 8003;
-const logReq = (req, res, next) => {
-  const time = Date.now();
-  res.on('finish', () => {
-    console.log(
-      JSON.stringify({
-        time,
-        dur: Date.now() - time,
-        method: req.method,
-        forwarded: req.get('X-Forwarded-For'),
-        ip: req.ip,
-        url: req.originalUrl,
-        status: res.statusCode,
-      }),
-    );
-  });
-  next();
-};
 
-publicapp.use(logReq);
-privateapp.use(logReq);
-faucetapp.use(logReq);
+
+publicapp.use(logRequest);
+privateapp.use(logRequest);
+faucetapp.use(logRequest);
 
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
@@ -274,27 +128,7 @@ publicapp.get('/metrics-config', async (req, res) => {
   res.send(result);
 });
 
-const dockerComposeYaml = (dockerimage, dockertag, netname, netdomain) => `\
-version: "2.2"
-services:
-  ag-solo:
-    image: ${dockerimage}:\${SDK_TAG:-${dockertag}}
-    ports:
-      - "\${HOST_PORT:-8000}:\${PORT:-8000}"
-    volumes:
-      - "ag-solo-state:/state"
-      - "$HOME/.agoric:/root/.agoric"
-    environment:
-      - "AG_SOLO_BASEDIR=/state/\${SOLO_HOME:-${dockertag}}"
-    entrypoint: ag-solo
-    command:
-      - setup
-      - --webhost=0.0.0.0
-      - --webport=\${PORT:-8000}
-      - --netconfig=\${NETCONFIG_URL:-https://${netname}${netdomain}/network-config}
-volumes:
-  ag-solo-state:
-`;
+
 
 publicapp.get('/docker-compose.yml', (req, res) => {
   res.setHeader(
@@ -369,118 +203,8 @@ const addRequest = (address, request) => {
   publication.updateState(address);
 };
 
-/**
- * Returns the status of a transaction against hash `txHash`.
- * The status is one of the values from `TRANSACTION_STATUS`
- * @param {string} txHash
- * @returns {Promise<number>}
- */
-const getTransactionStatus = async txHash => {
-  let { exitCode, stderr, stdout } = await nothrow($`\
-    ${agBinary} query tx ${txHash} \
-    --chain-id=${chainId} \
-    --home=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --type=hash \
-  `);
-  exitCode = exitCode ?? 1;
-
-  // This check is brittle as this can also happen in case
-  // an invalid txhash was provided. So there is no reliable
-  // distinction between the case of invalid txhash and a
-  // transaction currently in the mempool. We could use search
-  // endpoint but that seems overkill to cover a case where
-  // the only the deliberate use of invalid hash can effect the user
-  if (exitCode && stderr.includes(`tx (${txHash}) not found`))
-    return TRANSACTION_STATUS.NOT_FOUND;
-
-  const code = Number(JSON.parse(stdout).code);
-  return code ? TRANSACTION_STATUS.FAILED : TRANSACTION_STATUS.SUCCESSFUL;
-};
-
-/**
- * @param {string} address
- * @param {string} clientType
- * @param {string} txHash
- * @returns {Promise<void>}
- */
-const pollForProvisioning = async (address, clientType, txHash) => {
-  const status = await getTransactionStatus(txHash);
-  status === TRANSACTION_STATUS.NOT_FOUND
-    ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
-    : status === TRANSACTION_STATUS.SUCCESSFUL
-      ? await provisionAddress(address, clientType)
-      : console.log(
-        `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
-      );
-};
-
-/**
- * @param {string} address
- * @param {string} clientType
- * @returns {Promise<void>}
- */
-const provisionAddress = async (address, clientType) => {
-  let { exitCode, stderr } = await nothrow($`\
-    ${agBinary} tx swingset provision-one faucet_provision ${address} ${clientType} \
-    --broadcast-mode=block \
-    --chain-id=${chainId} \
-    --from=${FAUCET_KEYNAME} \
-    --keyring-backend=test \
-    --keyring-dir=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --yes \
-  `);
-  exitCode = exitCode ?? 1;
-
-  if (exitCode)
-    console.log(
-      `Failed to provision address "${address}" of type "${clientType}" with error message: ${stderr}`,
-    );
-};
-
-/**
- * Send funds to `address`.
- * It only waits for the transaction
- * checks and doesn't wait for the
- * transaction to actually be included
- * in a block. The returned transaction
- * hash can be used to get the current status
- * of the transaction later
- * @param {string} address
- * @param {string} amount
- * @returns {Promise<[number, string]>}
- */
-const sendFunds = async (address, amount) => {
-  let { exitCode, stdout } = await nothrow($`\
-    ${agBinary} tx bank send ${FAUCET_KEYNAME} ${address} ${amount} \
-    --broadcast-mode=sync \
-    --chain-id=${chainId} \
-    --keyring-backend=test \
-    --keyring-dir=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --yes \
-  `);
-  exitCode = exitCode ?? 1;
-
-  if (exitCode) return [exitCode, ''];
-  return [exitCode, String(JSON.parse(stdout).txhash)];
-};
 
 // Faucet worker.
-
-const constructAmountToSend = (amount, denoms) => denoms.map(denom => `${amount}${denom}`).join(',');
-
-const getDenoms = async () => {
-  // Not handling pagination as it is used for testing. Limit 100 shoud suffice
-
-  const result = await $`${agBinary} query bank total --limit=100 -o json`;
-  const output = JSON.parse(result.stdout.trim());
-  return output.supply.map((element) => element.denom);
-}
-
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
 
@@ -737,14 +461,7 @@ faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`);
 });
 
-if (FAKE) {
-  dockerImage = 'asdf:unknown';
-} else {
-  const statefulSet = await makeKubernetesRequest(
-    `/apis/apps/v1/namespaces/${namespace}/statefulsets/${podname}`,
-  );
-  dockerImage = statefulSet.spec.template.spec.containers[0].image;
-}
+
 publicapp.listen(publicport, () => {
   console.log(`publicapp listening on port ${publicport}`);
 });

@@ -1,4 +1,14 @@
+// @ts-check
 import { fs } from 'zx';
+import {
+  DataCache,
+  getDockerImageValue,
+  getMetricsRequest,
+  getNetworkConfig,
+  getRevisionValue,
+  getServices,
+  makeKubernetesRequest,
+} from './utils';
 
 export const BASE_AMOUNT = '25000000';
 
@@ -59,23 +69,9 @@ assert(agoricHome, X`AGORIC_HOME not set`);
 export const chainId = process.env.CHAIN_ID;
 assert(chainId, X`CHAIN_ID not set`);
 
-let revisionValue;
+export const revision = getRevisionValue();
+export const dockerImage = getDockerImageValue;
 
-if (FAKE) {
-  revisionValue = 'fake_revision';
-} else {
-  revisionValue =
-    AG0_MODE === 'true'
-      ? 'ag0'
-      : fs
-          .readFileSync(
-            '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
-            {
-              encoding: 'utf8',
-              flag: 'r',
-            },
-          )
-          .trim();
-}
-
-export const revision = revisionValue;
+export const ipsCache = new DataCache(getServices, 0.1);
+export const networkConfig = new DataCache(getNetworkConfig, 0.5);
+export const metricsCache = new DataCache(getMetricsRequest, 0.1);
