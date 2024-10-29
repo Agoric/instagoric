@@ -3,8 +3,7 @@ import './lockdown.js';
 
 import process from 'process';
 import express from 'express';
-import tmp from 'tmp';
-import { $, fs, sleep } from 'zx';
+import { fs, sleep } from 'zx';
 import {
   BASE_AMOUNT,
   CLIENT_AMOUNT,
@@ -18,7 +17,6 @@ import {
   NETDOMAIN,
   TRANSACTION_STATUS,
   AG0_MODE,
-  agBinary,
   FAKE,
   chainId,
   namespace,
@@ -26,7 +24,8 @@ import {
   ipsCache,
   networkConfig,
   metricsCache,
-  dockerImage
+  dockerImage,
+  tmpDir
 } from './constants.js';
 import {
   dockerComposeYaml,
@@ -35,7 +34,8 @@ import {
   sendFunds,
   constructAmountToSend,
   getDenoms,
-  logRequest
+  logRequest,
+  addKey,
 } from './utils.js';
 import { makeSubscriptionKit } from '@agoric/notifier';
 
@@ -44,18 +44,8 @@ let CLUSTER_NAME;
 
 if (FAKE) {
   console.log('FAKE MODE');
-  const tmpDir = await new Promise((resolve, reject) => {
-    tmp.dir({ prefix: 'faucet', postfix: 'home' }, (err, path) => {
-      if (err) {
-        return reject(err);
-      }
-      resolve(path);
-    });
-  });
-  // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
-  await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  process.env.AGORIC_HOME = tmpDir;
+  await addKey(tmpDir, FAUCET_KEYNAME)
 }
 
 const publicapp = express();

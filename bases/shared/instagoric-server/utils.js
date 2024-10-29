@@ -331,3 +331,18 @@ export const getDockerImageValue = async (namespace, podname) => {
   );
   return statefulSet.spec.template.spec.containers[0].image;
 };
+
+export const createTempDir = async () => {
+  return new Promise((resolve, reject) => {
+    tmp.dir({ prefix: 'faucet', postfix: 'home' }, (err, path) => {
+      if (err) {
+        return reject(err);
+      }
+      resolve(path);
+    });
+  });
+};
+
+export const addKey = async (directory, keyName) => {
+  await $`${agBinary} --home=${directory} keys --keyring-backend=test add ${keyName}`;
+};

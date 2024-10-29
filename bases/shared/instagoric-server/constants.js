@@ -1,13 +1,13 @@
 // @ts-check
 import { fs } from 'zx';
 import {
+  createTempDir,
   DataCache,
   getDockerImageValue,
   getMetricsRequest,
   getNetworkConfig,
   getRevisionValue,
   getServices,
-  makeKubernetesRequest,
 } from './utils';
 
 export const BASE_AMOUNT = '25000000';
@@ -61,16 +61,17 @@ export const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
 export const NODE_ID =
   process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
 
-const { details: X } = globalThis.assert;
+export const tmpDir = FAKE ? await createTempDir() : null;
 
-export const agoricHome = process.env.AGORIC_HOME;
+const { details: X } = globalThis.assert;
+export const agoricHome = FAKE ? tmpDir : process.env.AGORIC_HOME;
 assert(agoricHome, X`AGORIC_HOME not set`);
 
 export const chainId = process.env.CHAIN_ID;
 assert(chainId, X`CHAIN_ID not set`);
 
 export const revision = getRevisionValue();
-export const dockerImage = getDockerImageValue;
+export const dockerImage = await getDockerImageValue(namespace, podname);
 
 export const ipsCache = new DataCache(getServices, 0.1);
 export const networkConfig = new DataCache(getNetworkConfig, 0.5);
