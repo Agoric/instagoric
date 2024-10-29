@@ -6,51 +6,35 @@ import express from 'express';
 import https from 'https';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
-
+import {
+  BASE_AMOUNT,
+  CLIENT_AMOUNT,
+  DELEGATE_AMOUNT,
+  COMMANDS,
+  PROVISIONING_POOL_ADDR,
+  DOCKERTAG,
+  DOCKERIMAGE,
+  FAUCET_KEYNAME,
+  NETNAME,
+  NETDOMAIN,
+  RPC_PORT,
+  TRANSACTION_STATUS,
+  AG0_MODE,
+  agBinary,
+  podname,
+  INCLUDE_SEED,
+  NODE_ID,
+  FAKE,
+  agoricHome,
+  chainId,
+  namespace,
+  revision
+} from './constants.js';
 import { makeSubscriptionKit } from '@agoric/notifier';
 
-const { details: X } = globalThis.assert;
-
-const BASE_AMOUNT = "25000000";
 // Adding here to avoid ReferenceError for local server. Not needed for k8
 let CLUSTER_NAME;
 
-const CLIENT_AMOUNT =
-  process.env.CLIENT_AMOUNT || '25000000uist,25000000ibc/toyusdc';
-const DELEGATE_AMOUNT =
-  process.env.DELEGATE_AMOUNT ||
-  '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
-
-const COMMANDS = {
-  "SEND_BLD/IBC": "send_bld_ibc",
-  "SEND_AND_PROVISION_IST": "send_ist_and_provision",
-  "FUND_PROV_POOL": "fund_provision_pool",
-  "CUSTOM_DENOMS_LIST": "custom_denoms_list",
-};
-
-
-const PROVISIONING_POOL_ADDR = 'agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346';
-  
-const DOCKERTAG = process.env.DOCKERTAG; // Optional.
-const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
-const FAUCET_KEYNAME =
-  process.env.FAUCET_KEYNAME || process.env.WHALE_KEYNAME || 'self';
-const NETNAME = process.env.NETNAME || 'devnet';
-const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
-const AG0_MODE = (process.env.AG0_MODE || 'false') === 'true';
-const agBinary = AG0_MODE ? 'ag0' : 'agd';
-const podname = process.env.POD_NAME || 'validator-primary';
-const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
-const NODE_ID =
-  process.env.NODE_ID || 'fb86a0993c694c981a28fa1ebd1fd692f345348b';
-const RPC_PORT = 26657;
-const TRANSACTION_STATUS = {
-  FAILED: 1000,
-  NOT_FOUND: 1001,
-  SUCCESSFUL: 1002,
-};
-
-const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 if (FAKE) {
   console.log('FAKE MODE');
   const tmpDir = await new Promise((resolve, reject) => {
@@ -67,33 +51,10 @@ if (FAKE) {
   process.env.AGORIC_HOME = tmpDir;
 }
 
-const agoricHome = process.env.AGORIC_HOME;
-assert(agoricHome, X`AGORIC_HOME not set`);
-
-const chainId = process.env.CHAIN_ID;
-assert(chainId, X`CHAIN_ID not set`);
 
 let dockerImage;
 
-const namespace =
-  process.env.NAMESPACE ||
-  fs.readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/namespace', {
-    encoding: 'utf8',
-    flag: 'r',
-  });
 
-let revision;
-if (FAKE) {
-  revision = 'fake_revision';
-} else {
-  revision =
-    process.env.AG0_MODE === 'true'
-      ? 'ag0'
-      : fs.readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
-          encoding: 'utf8',
-          flag: 'r',
-        }).trim();
-}
 
 /**
  * @param {string} relativeUrl
