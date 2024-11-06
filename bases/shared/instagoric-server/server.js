@@ -844,8 +844,6 @@ publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
     const fileName = file.originalname;
     const bundle = file.filename;
 
-    console.log("bundle", bundle)
-    
     if (fileName.startsWith('b1-')) {
     try {
       const result = await $`\
@@ -859,9 +857,6 @@ publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
         return;
       }
 
-      // const result2 = await $`${agBinary} query vstorage data bundles --chain-id=${chainId} agoriclocal --output json`;
-      // const bundles = JSON.parse(result2.stdout);
-      // console.log("bundles", bundles)
     } catch (error) {
       res.status(500).send(`Error processing file ${bundle}: ${error.message}`);
       return;
@@ -871,9 +866,6 @@ publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
 
 const proposalPermitFile = files.filter(file => file.originalname.endsWith('permit.json')).map(file => file.filename)[0];
 const jsFile = files.filter(file => file.originalname.endsWith('.js')).map(file => file.filename)[0];
-
-console.log("proposalPermitFile", proposalPermitFile);
-console.log("jsFile", jsFile);
 
 const result = await $`${agBinary} tx gov submit-proposal swingset-core-eval uploads/${proposalPermitFile} uploads/${jsFile} --title="Vaults Core Eval" --description="Vaults Core Eval" --deposit=1000000ubld --gas=auto --gas-adjustment=1.2 --from ${FAUCET_KEYNAME} --chain-id ${chainId} --home=${agoricHome} --keyring-backend=test --keyring-dir=${agoricHome} --yes`
 
