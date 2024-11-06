@@ -84,18 +84,18 @@ const namespace =
     flag: 'r',
   });
 
-const revision =
-  process.env.AG0_MODE === 'true'
-    ? 'ag0'
-    : fs
-      .readFileSync(
-        '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
-        {
+let revision;
+if (FAKE) {
+  revision = 'fake_revision';
+} else {
+  revision =
+    process.env.AG0_MODE === 'true'
+      ? 'ag0'
+      : fs.readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
           encoding: 'utf8',
           flag: 'r',
-        },
-      )
-      .trim();
+        }).trim();
+}
 
 /**
  * @param {string} relativeUrl
@@ -260,8 +260,10 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
-  const logsQuery = { "62l": { "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
-  const logsUrl = `https://${netname}.logs${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const gcloudLoggingDatasource = 'P470A85C5170C7A1D'
+  const logsQuery = { "62l": { "datasource": gcloudLoggingDatasource, "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
+  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -286,7 +288,9 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href=${logsUrl}>https://${netname}.logs${domain}</a>
+Logs: <a href=${logsUrl}>Click Here</a>
+Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
+VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -533,6 +537,7 @@ const startFaucetWorker = async () => {
       console.log(`Processing "${command}" for address "${address}"`);
 
       switch (command) {
+        case 'client':
         case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
 
@@ -543,15 +548,16 @@ const startFaucetWorker = async () => {
           }
           break;
         }
+        case 'delegate':
         case COMMANDS["SEND_BLD/IBC"]: {
           [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
         }
+        case 'delegate':
         case COMMANDS["FUND_PROV_POOL"]: {
           [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT);
           break;
         }
-
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
           [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
             break;
@@ -623,16 +629,18 @@ faucetapp.get('/', async (req, res) => {
     <style>
       
       .dropdown {
-      overflow: scroll;
-      height: 120px;
-      width: fit-content;
+        overflow: scroll;
+        height: 120px;
+        width: fit-content;
       }
 
       .dropdown-content {
         display: block;
         background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        min-width: 160px; 
+        border: 1px solid #ccc;
+        padding: 10px;
+        box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
       }
 
       .dropdown-content label {
@@ -682,10 +690,11 @@ faucetapp.use(
 
 faucetapp.post('/go', (req, res) => {
   const { command, address, clientType, denoms } = req.body;
+
   if (
-    ((command === COMMANDS["SEND_AND_PROVISION_IST"] &&
+    ((command === COMMANDS["SEND_AND_PROVISION_IST"] || command === 'client' &&
       ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === 'delegate' || command === COMMANDS['SEND_BLD/IBC'] ||
       command === COMMANDS["FUND_PROV_POOL"] ||
       command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
     (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&

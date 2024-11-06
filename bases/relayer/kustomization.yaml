@@ -1,0 +1,14 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+
+configMapGenerator:
+  - name: relayer-helpers
+    files:
+      - confio-relayer.patch
+      - app.yaml
+      - entrypoint.sh
+      - registry.yaml
+
+kind: Kustomization
+
+resources:
+  - deployment.yaml

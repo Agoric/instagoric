@@ -1,0 +1,7 @@
+diff --git a/node_modules/@confio/relayer/build/binary/create-logger.js b/node_modules/@confio/relayer/build/binary/create-logger.js
+index e0ea321..876b412 100644
+--- a/node_modules/@confio/relayer/build/binary/create-logger.js
++++ b/node_modules/@confio/relayer/build/binary/create-logger.js
+@@ -79,1 +79,1 @@             ...(stackTrace ? {} : { stack: undefined }), // remove `stack` from the output if no --stack-trace is provided
+-        });
++        }, (key, value) => typeof value === 'bigint' ? value.toString() : value);
