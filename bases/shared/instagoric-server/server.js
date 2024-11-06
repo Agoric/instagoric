@@ -706,15 +706,26 @@ faucetapp.use(
 faucetapp.post('/go', (req, res) => {
   const { command, address, clientType, denoms, amount } = req.body;
 
-  if (
-    ((command === COMMANDS["SEND_AND_PROVISION_IST"] || command === 'client' &&
-      ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === 'delegate' || command === COMMANDS['SEND_BLD/IBC'] ||
-      command === COMMANDS["FUND_PROV_POOL"] ||
-      command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
-    (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&
-    address.length === 45 &&
-    /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
+  const MAX_AMOUNT = 100;
+
+  if (amount > MAX_AMOUNT) {
+    res
+      .status(400)
+      .json({ error: `Amount exceeds maximum limit of ${MAX_AMOUNT}` });
+  } else if (
+    (command === COMMANDS['SEND_AND_PROVISION_IST'] ||
+      (command === 'client' &&
+        ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
+      command === 'delegate' ||
+      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === COMMANDS['FUND_PROV_POOL'] ||
+      (command === COMMANDS['CUSTOM_DENOMS_LIST'] &&
+        denoms &&
+        denoms.length > 0)) &&
+    (command === COMMANDS['FUND_PROV_POOL'] ||
+      (typeof address === 'string' &&
+        address.length === 45 &&
+        /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
   ) {
     addRequest(address, [res, command, clientType, denoms, amount]);
   } else {
