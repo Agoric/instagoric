@@ -291,6 +291,12 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.labels['app']
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  name: otel-config
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+                  optional: true
           ports:
             - containerPort: 26656
               name: p2p
@@ -357,22 +363,6 @@ spec:
         - name: log-app
           image: busybox:latest
           args: [/bin/sh, -c, 'tail -n 10 -F /state/app.log']
-          volumeMounts:
-          - name: state
-            mountPath: /state
-            readOnly: true
-          resources:
-            limits:
-              cpu: 100m
-              ephemeral-storage: 1Gi
-              memory: 50Mi
-            requests:
-              cpu: 100m
-              ephemeral-storage: 1Gi
-              memory: 50Mi
-        - name: log-slog
-          image: busybox:latest
-          args: [/bin/sh, -c, 'tail -n 10 -F /state/slogfile_current.json']
           volumeMounts:
           - name: state
             mountPath: /state
