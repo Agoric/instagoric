@@ -376,6 +376,22 @@ spec:
               cpu: 100m
               ephemeral-storage: 1Gi
               memory: 50Mi
+        - name: log-slog
+          image: busybox:latest
+          args: [/bin/sh, -c, 'tail -n 10 -F /state/slogfile_current.json']
+          volumeMounts:
+          - name: state
+            mountPath: /state
+            readOnly: true
+          resources:
+            limits:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
+            requests:
+              cpu: 100m
+              ephemeral-storage: 1Gi
+              memory: 50Mi
         - name: log-server
           image: busybox:latest
           args: [/bin/sh, -c, 'tail -n 10 -F /state/server.log']
