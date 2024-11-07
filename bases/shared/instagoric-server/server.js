@@ -64,7 +64,9 @@ if (FAKE) {
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
   await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  process.env.AGORIC_HOME = tmpDir;
+  if(!process.env.AGORIC_HOME){
+    process.env.AGORIC_HOME = tmpDir;
+  }
 }
 
 const agoricHome = process.env.AGORIC_HOME;
@@ -528,7 +530,7 @@ const startFaucetWorker = async () => {
       console.log(`dequeued address ${address}`);
       const request = addressToRequest.get(address);
 
-      const [response, command, clientType, denoms] = request;
+      const [response, command, clientType, denoms, amount] = request;
       let exitCode = 1;
       let txHash = '';
 
@@ -557,7 +559,11 @@ const startFaucetWorker = async () => {
           break;
         }
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
-          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
+          let tokenAmount = BASE_AMOUNT;
+          if (amount) {
+            tokenAmount = String(Number(amount) * 1000_000);
+          }
+          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(tokenAmount, Array.isArray(denoms) ? denoms : [denoms]));
             break;
 
         }
@@ -601,7 +607,8 @@ faucetapp.get('/', async (req, res) => {
     denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
   })
   const denomsDropDownHtml =`<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`
-  
+  const maxTokenAmount = 100;
+
   const clientText = !AG0_MODE
     ? `<input type="radio" id="client" name="command" value=${COMMANDS["SEND_AND_PROVISION_IST"]} onclick="toggleRadio(event)">
 <label for="client">send IST and provision </label>
@@ -666,6 +673,16 @@ ${clientText}
 <br>
 <div id='denoms' class="denomsClass"> 
 Denoms: ${denomsDropDownHtml} <br> <br>
+<label for="amount">Amount:</label>
+<input type="number" id="amount" 
+       name="amount" 
+       step="any" 
+       placeholder="Enter amount" 
+       max="${maxTokenAmount}" 
+       value="25"> 
+<br> 
+<small>The default amount is 25, but you can enter any value up to ${maxTokenAmount}.</small>
+<br> <br>
 </div>
 <input type="submit" />
 </form>
@@ -687,19 +704,30 @@ faucetapp.use(
 );
 
 faucetapp.post('/go', (req, res) => {
-  const { command, address, clientType, denoms } = req.body;
+  const { command, address, clientType, denoms, amount } = req.body;
 
-  if (
-    ((command === COMMANDS["SEND_AND_PROVISION_IST"] || command === 'client' &&
-      ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === 'delegate' || command === COMMANDS['SEND_BLD/IBC'] ||
-      command === COMMANDS["FUND_PROV_POOL"] ||
-      command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
-    (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&
-    address.length === 45 &&
-    /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
+  const MAX_AMOUNT = 100;
+
+  if (amount > MAX_AMOUNT) {
+    res
+      .status(400)
+      .json({ error: `Amount exceeds maximum limit of ${MAX_AMOUNT}` });
+  } else if (
+    (command === COMMANDS['SEND_AND_PROVISION_IST'] ||
+      (command === 'client' &&
+        ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
+      command === 'delegate' ||
+      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === COMMANDS['FUND_PROV_POOL'] ||
+      (command === COMMANDS['CUSTOM_DENOMS_LIST'] &&
+        denoms &&
+        denoms.length > 0)) &&
+    (command === COMMANDS['FUND_PROV_POOL'] ||
+      (typeof address === 'string' &&
+        address.length === 45 &&
+        /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
   ) {
-    addRequest(address, [res, command, clientType, denoms]);
+    addRequest(address, [res, command, clientType, denoms, amount]);
   } else {
     res.status(403).send('invalid form');
   }
