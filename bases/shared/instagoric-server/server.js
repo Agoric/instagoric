@@ -291,6 +291,7 @@ Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${
 Logs: <a href=${logsUrl}>Click Here</a>
 Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
 VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
+Install Bundles: <a href="https://${netname}${domain}/install-bundle">https://${netname}${domain}/install-bundle</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
