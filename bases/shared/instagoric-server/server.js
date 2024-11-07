@@ -787,7 +787,7 @@ publicapp.get('/install-bundle', async (req, res) => {
 
     <h1>Install Bundle and Submit Core Eval Proposal</h1>
 
-    <form id="uploadForm" action="/install-bundle" method="POST" enctype="multipart/form-data">
+    <form id="uploadForm" enctype="multipart/form-data">
         <input type="file" name="file" id="fileInput" multiple required>
         <br><br>
         <button type="submit">Upload and Submit Proposal</button>
@@ -840,39 +840,46 @@ publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
 
   // Iterate through all files and process each one
   for (const file of files) {
-    
     const fileName = file.originalname;
     const bundle = file.filename;
 
     if (fileName.startsWith('b1-')) {
-    try {
-      const result = await $`\
+      try {
+        const result = await $`\
         ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
         --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
-        --chain-id=${chainId} -b block --yes
+        --chain-id=${chainId} --yes
       `;
 
-      if (result.exitCode !== 0) {
-        res.status(500).send(`Error processing file ${bundle}: ${result.stderr}`);
+        if (result.exitCode !== 0) {
+          res
+            .status(500)
+            .send(`Error processing file ${bundle}: ${result.stderr}`);
+          return;
+        }
+      } catch (error) {
+        res
+          .status(500)
+          .send(`Error processing file ${bundle}: ${error.message}`);
         return;
       }
-
-    } catch (error) {
-      res.status(500).send(`Error processing file ${bundle}: ${error.message}`);
-      return;
     }
   }
-}
 
-const proposalPermitFile = files.filter(file => file.originalname.endsWith('permit.json')).map(file => file.filename)[0];
-const jsFile = files.filter(file => file.originalname.endsWith('.js')).map(file => file.filename)[0];
+  const proposalPermitFile = files
+    .filter(file => file.originalname.endsWith('permit.json'))
+    .map(file => file.filename)[0];
+  const jsFile = files
+    .filter(file => file.originalname.endsWith('.js'))
+    .map(file => file.filename)[0];
 
-const result = await $`${agBinary} tx gov submit-proposal swingset-core-eval uploads/${proposalPermitFile} uploads/${jsFile} --title="Vaults Core Eval" --description="Vaults Core Eval" --deposit=1000000ubld --gas=auto --gas-adjustment=1.2 --from ${FAUCET_KEYNAME} --chain-id ${chainId} --home=${agoricHome} --keyring-backend=test --keyring-dir=${agoricHome} --yes`
+  const result =
+    await $`${agBinary} tx gov submit-proposal swingset-core-eval uploads/${proposalPermitFile} uploads/${jsFile} --title="Vaults Core Eval" --description="Vaults Core Eval" --deposit=1000000ubld --gas=auto --gas-adjustment=1.2 --from ${FAUCET_KEYNAME} --chain-id ${chainId} --home=${agoricHome} --keyring-backend=test --keyring-dir=${agoricHome} --yes`;
 
-if (result.exitCode !== 0) {
-  res.status(500).send(`Error submiting proposal ${result.stderr}`);
-  return;
-}
+  if (result.exitCode !== 0) {
+    res.status(500).send(`Error submiting proposal ${result.stderr}`);
+    return;
+  }
 
   // If all files are processed successfully
   res.status(200).send('All files uploaded and processed successfully');
