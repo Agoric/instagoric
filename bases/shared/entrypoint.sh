@@ -39,6 +39,8 @@ export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-publi
 export MAINNET_SNAPSHOT="agoric_15131589.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
+export MAINNET_ARCHIVE_SNAPSHOT="full_archive.tar.lz4"
+export MAINNET_ARCHIVE_SNAPSHOT_URL="https://storage.googleapis.com/strangelove-agoric-mainnet-snapshots/latest"
 export TMPDIR=/state/tmp
 
 # Kubernetes API constants
@@ -997,16 +999,34 @@ case "$ROLE" in
     "follower")
         (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
         if [[ ! -f "/state/follower-initialized" ]]; then
-            cd /state/
-            if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
-                apt install -y axel
-                axel --quiet -n 10 -o "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" || exit 1
-            fi
+            cd /state || exit 0
+
             apt update
-            apt install lz4
-            lz4 -c -d "$MAINNET_SNAPSHOT"  | tar -x -C $AGORIC_HOME
-            wget -O addrbook.json "$MAINNET_ADDRBOOK_URL"
-            cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
+            apt install axel lz4 --yes > /dev/null
+
+            curl "$MAINNET_ADDRBOOK_URL" --output addrbook.json
+            cp addrbook.json "$AGORIC_HOME/config/addrbook.json" --force
+
+            if [ "$NETNAME" == "archive" ]
+            then
+                if [[ ! -f "/state/$MAINNET_ARCHIVE_SNAPSHOT" ]]
+                then
+                    curl "$MAINNET_ARCHIVE_SNAPSHOT_URL/$MAINNET_ARCHIVE_SNAPSHOT" \
+                     --location --output "/state/$MAINNET_ARCHIVE_SNAPSHOT"
+                    tar --directory "$AGORIC_HOME" --extract \
+                     --file "/state/$MAINNET_ARCHIVE_SNAPSHOT" --use-compress-program lz4
+                fi
+            else
+                if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]
+                then
+                    axel "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" \
+                     --quiet --num-connections=10 \
+                     --output="$MAINNET_SNAPSHOT" || exit 1
+                    tar --directory "$AGORIC_HOME" --extract \
+                     --file "/state/$MAINNET_SNAPSHOT" --use-compress-program lz4
+                fi
+            fi
+
             # disable rosetta
             cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
             mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
