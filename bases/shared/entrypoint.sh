@@ -1007,7 +1007,7 @@ case "$ROLE" in
             curl "$MAINNET_ADDRBOOK_URL" --output addrbook.json
             cp addrbook.json "$AGORIC_HOME/config/addrbook.json" --force
 
-            if [ "$NETNAME" == "archive" ]
+            if [ "$NETNAME" == "mainnet-archive" ]
             then
                 if [[ ! -f "/state/$MAINNET_ARCHIVE_SNAPSHOT" ]]
                 then
