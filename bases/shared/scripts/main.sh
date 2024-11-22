@@ -2,29 +2,137 @@
 set -x
 set +e
 
-CURRENT_DIRECTORY_PATH=$(dirname -- "${BASH_SOURCE[0]}")
+CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
-# shellcheck disable=SC1091
 source "$CURRENT_DIRECTORY_PATH/source.sh"
 
-mkdir --parents "$AGORIC_HOME"
-
-mkdir --parents "$TMPDIR"
+mkdir --parents "$AGORIC_HOME" "$TMPDIR"
 # shellcheck disable=SC2086,SC2115
 rm --force --recursive -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
 mkdir --parents /state/cores
 chmod a+rwx /state/cores
 
-# TODO: evaluate if this is needed as this fails on read only file system
 echo "/state/cores/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
-
-ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 
 # Copy a /config/network/$basename to $BOOTSTRAP_CONFIG
 resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/packages_g')
 resolved_basename=$(basename "$resolved_config")
 source_config="/config/network/$resolved_basename"
 test ! -e "$source_config" || cp "$source_config" "$resolved_config"
+
+backup_log_files_and_cleanup() {
+    SERVICE_ACCOUNT_JSON="/config/secrets/logs-backup.json"
+    if [ -f "$SERVICE_ACCOUNT_JSON" ]
+    then
+        BUCKET_NAME="agoric-chain-logs"
+        SCOPES="https://www.googleapis.com/auth/devstorage.read_write"
+        STATE_DIRECTORY_PATH=/state
+        TOKEN_URI="https://oauth2.googleapis.com/token"
+
+        base64url_encode() {
+            openssl base64 -e -A | \
+            tr '+/' '-_' | \
+            tr -d '='
+        }
+
+        CLIENT_EMAIL=$(
+            jq '.client_email' \
+            --raw-output < $SERVICE_ACCOUNT_JSON
+        )
+        PRIVATE_KEY=$(
+            jq '.private_key' \
+            --raw-output < $SERVICE_ACCOUNT_JSON | \
+            sed 's/\\n/\n/g'
+        )
+
+        HEADER='{"alg":"RS256","typ":"JWT"}'
+        ISSUER="$CLIENT_EMAIL"
+        AUDIENCE="$TOKEN_URI"
+        EXPIRATION=$(("$BOOT_TIME"+3600))
+        ISSUED_AT="$BOOT_TIME"
+
+        PAYLOAD=$(cat <<EOF
+{ "aud": "$AUDIENCE", "exp": $EXPIRATION, "iat": $ISSUED_AT, "iss": "$ISSUER", "scope": "$SCOPES" }
+EOF
+        )
+
+        HEADER_BASE64=$(echo -n "$HEADER" | base64url_encode)
+        PAYLOAD_BASE64=$(echo -n "$PAYLOAD" | base64url_encode)
+
+        SIGNATURE=$(
+            echo -n "${HEADER_BASE64}.${PAYLOAD_BASE64}" | \
+            openssl dgst -sha256 -sign <(echo -n "$PRIVATE_KEY") | \
+            base64url_encode
+        )
+
+        JWT="${HEADER_BASE64}.${PAYLOAD_BASE64}.${SIGNATURE}"
+
+        ACCESS_TOKEN=$(
+            curl $TOKEN_URI \
+            --data "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=$JWT" \
+            --header "Content-Type: application/x-www-form-urlencoded" --silent --request POST | \
+            jq --raw-output '.access_token'
+        )
+
+        upload_and_remove_file() {
+            FILE_PATH="$STATE_DIRECTORY_PATH/$1"
+            OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
+            FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
+
+            echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
+            HTTP_CODE=$(
+                curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
+                 --header "Authorization: Bearer $ACCESS_TOKEN" --output /dev/null --request POST \
+                 --silent --upload-file "$FILE_PATH" --write-out "%{http_code}"
+            )
+
+            # shellcheck disable=SC2181
+            if (($?)) || [ ! "$HTTP_CODE" -eq 200 ]
+            then
+                echo "Failed to upload file '$FILE_PATH'"
+            else
+                echo "Deleting file '$FILE_PATH'"
+                rm --force "$FILE_PATH"
+            fi
+        }
+
+        # shellcheck disable=SC2207
+        FILES=($(
+            find "$STATE_DIRECTORY_PATH" -type f | \
+            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|(slogfile_[0-9]+\.json)' | \
+            awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
+        ))
+
+        for file in "${FILES[@]}"
+        do
+            file_path="$STATE_DIRECTORY_PATH/$file"
+            if [ "$file_path" != "$APP_LOG_FILE" ] && [ "$file_path" != "$OTEL_LOG_FILE" ] && [ "$file_path" != "$SERVER_LOG_FILE" ] && [ "$file_path" != "$SLOGFILE" ]
+            then
+                upload_and_remove_file "$file" &
+            fi
+        done
+
+        OLDER_FILES=(app.log server.log otel.log)
+
+        for file in "${OLDER_FILES[@]}"
+        do
+            file_path="$STATE_DIRECTORY_PATH/$file"
+            if [ -f "$file_path" ] && [ ! -h "$file_path" ]
+            then
+                backup_file_path=$(echo "$file_path" | awk -F'[_/.]' '{printf("%s_old.%s\n", $3, $4)}')
+                mv "$file_path" "$STATE_DIRECTORY_PATH/$backup_file_path"
+                upload_and_remove_file "$backup_file_path" &
+            fi
+        done
+    fi
+}
+
+backup_log_files_and_cleanup
+
+ln --force --symbolic "$APP_LOG_FILE" /state/app.log
+ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
+ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
+ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
@@ -289,7 +397,7 @@ start_helper () {
       cd "$SRV" || exit
       yarn --production
       while true; do
-        yarn start >> /state/server.log 2>&1
+        yarn start >> "$SERVER_LOG_FILE" 2>&1
         sleep 1
       done
     )
@@ -315,7 +423,7 @@ auto_approve () {
 
                     VOTES=$($(ag_binary) query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
                     ACCOUNT_VOTE=$( [ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $($(ag_binary) keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
-
+                    
 
                     if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
                         echo "Already voted YES on proposal ID: $PROPOSAL_ID"
@@ -339,6 +447,7 @@ auto_approve () {
 }
 
 start_chain () {
+    # shellcheck disable=SC2068
     auto_approve &
 
     if [[ -z "$AG0_MODE" ]]; then 
@@ -347,9 +456,9 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> /state/app.log 2>&1)
+        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
-        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> /state/app.log 2>&1
+        $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
     fi
 }
 
@@ -444,42 +553,56 @@ fork_setup() {
     
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
+}
 
-    # sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
+start_otel_server() {
+    if [ -z "$ENABLE_TELEMETRY" ]
+    then
+        echo "skipping telemetry since ENABLE_TELEMETRY is not set"
+        unset OTEL_EXPORTER_OTLP_ENDPOINT
+        unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+    elif [ -f "$USE_OTEL_CONFIG" ]
+    then
+        cd "$HOME" || return
 
-    # For importing a exported state only
-    # sed -i 's/halt-height = 0/halt-height = 1/' $AGORIC_HOME/config/app.toml
+        container_id=$(
+            grep systemd < /proc/self/cgroup | \
+            head --lines 1 | \
+            cut --delimiter / --fields 4
+        )
+        ARCHITECTURE="$(dpkg --print-architecture)"
+
+        ddtracetarget=""
+        if [[ $DD_TRACE_ENABLED == "true" ]]; then
+            ddtracetarget=", otlphttp/datadogagent"
+        fi
+
+        echo "starting telemetry collector"
+        export CONTAINER_ID="$container_id"
+
+        OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
+        cp "$USE_OTEL_CONFIG" "$OTEL_CONFIG"
+
+        sed "$OTEL_CONFIG" \
+         --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
+         --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
+         --expression "s/@DD_API_KEY@/${DD_API_KEY}/" \
+         --expression "s/@DD_SITE@/${DD_SITE}/" \
+         --expression "s|@DD_TRACES@|${ddtracetarget}|" \
+         --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
+         --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
+         --expression "s/@NAMESPACE@/${NAMESPACE}/" \
+         --in-place
+
+        curl "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${ARCHITECTURE}.tar.gz" \
+         --location --output otel.tgz
+        tar --extract --file otel.tgz --gzip
+        "$HOME/otelcol-contrib" --config "$OTEL_CONFIG" >> "$OTEL_LOG_FILE" 2>&1
+    fi
 }
 
 ###
-if [[ -z "$AG0_MODE" ]]; then 
-    if [[ -z "${ENABLE_TELEMETRY}" ]]; then
-    echo "skipping telemetry since ENABLE_TELEMETRY is not set"
-    unset OTEL_EXPORTER_OTLP_ENDPOINT
-    unset OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
-    elif [[ -f "${USE_OTEL_CONFIG}" ]]; then
-            ddtracetarget=""
-            if [[ $DD_TRACE_ENABLED == "true" ]]; then
-                ddtracetarget=",\"otlphttp\\/datadogagent\""
-            fi
-            echo "starting telemetry collector"
-            OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
-            cp "${USE_OTEL_CONFIG}" "$OTEL_CONFIG"
-            container_id=$(cat /proc/self/cgroup | grep systemd | head -1 | cut -d/ -f4)
-            export CONTAINER_ID="$container_id"
-
-            sed -i.bak -e "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
-                -e "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-                -e "s/@CHAIN_ID@/${CHAIN_ID}/" \
-                -e "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-                -e "s/@DD_TRACES@/${ddtracetarget}/" \
-                -e "s/@DD_API_KEY@/${DD_API_KEY}/" \
-                -e "s/@DD_SITE@/${DD_SITE}/" \
-                -e "s/@NAMESPACE@/${NAMESPACE}/" \
-                "$HOME/instagoric-otel-config.yaml"
-            (/usr/local/bin/otelcol-contrib --config "$OTEL_CONFIG" >> /state/otel.log  2>&1) &
-    fi
-fi
+start_otel_server &
 
 
 echo "ROLE: $ROLE"
@@ -705,6 +828,7 @@ case "$ROLE" in
             ( wait_till_syncup_and_fund ) &
         fi
 
+        /bin/bash /entrypoint/cron.sh
         start_chain
         ;;
 
@@ -801,6 +925,9 @@ case "$ROLE" in
     "fork1")
         (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
         fork_setup agoric1
+
+        /bin/bash /entrypoint/cron.sh
+
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain --iavl-disable-fastnode false
         ;;
@@ -829,6 +956,8 @@ case "$ROLE" in
             sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
             touch /state/follower-initialized
         fi
+
+        /bin/bash /entrypoint/cron.sh
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain

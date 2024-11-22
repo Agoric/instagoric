@@ -1,5 +1,6 @@
 #!/bin/bash
-set -ex
+set -x
+set +e
 
 DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 SCRIPTS_DIRECTORY="$HOME/entrypoint"

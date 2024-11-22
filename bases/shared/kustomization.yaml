@@ -14,7 +14,9 @@ configMapGenerator:
   - name: entrypoint
     files:
       - entrypoint.tar.gz
+      - cron.sh
       - entrypoint.sh
+      - restart-pods.sh
   - name: server
     files:
       - instagoric-server/lockdown.js

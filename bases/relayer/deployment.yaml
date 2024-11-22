@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: relayer
+
+spec:
+  selector:
+    matchLabels:
+      app: relayer
+
+  template:
+    metadata:
+      labels:
+        app: relayer
+
+    spec:
+      containers:
+        - command:
+            - /bin/bash
+            - -x
+            - /root/scripts/entrypoint.sh
+          env:
+            - name: CHAIN_ID
+              valueFrom:
+                configMapKeyRef:
+                  key: CHAIN_ID
+                  name: instagoric-release
+            - name: EXTERNAL_CHAIN_NAME
+              valueFrom:
+                configMapKeyRef:
+                  key: EXTERNAL_CHAIN_NAME
+                  name: instagoric-release
+                  optional: true
+            - name: INTERNAL_CHAIN_ADDRESS_PREFIX
+              valueFrom:
+                configMapKeyRef:
+                  key: INTERNAL_CHAIN_ADDRESS_PREFIX
+                  name: instagoric-release
+                  optional: true
+            - name: INTERNAL_CHAIN_GAS_DENOM
+              valueFrom:
+                configMapKeyRef:
+                  key: INTERNAL_CHAIN_GAS_DENOM
+                  name: instagoric-release
+                  optional: true
+          image: ghcr.io/agoric/agoric-sdk
+          name: relayer
+          resources:
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+            requests:
+              cpu: 200m
+              memory: 400Mi
+          volumeMounts:
+            - mountPath: /root/scripts
+              name: helpers
+      volumes:
+        - configMap:
+            name: relayer-helpers
+          name: helpers
