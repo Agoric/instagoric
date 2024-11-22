@@ -13,6 +13,7 @@ configMapGenerator:
       - resources/economy-proposals.json
   - name: entrypoint
     files:
+      - entrypoint.tar.gz
       - cron.sh
       - entrypoint.sh
       - restart-pods.sh
