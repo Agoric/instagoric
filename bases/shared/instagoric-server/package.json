@@ -38,6 +38,7 @@
     "@endo/init": "^0.5.60",
     "@endo/promise-kit": "^0.2.41",
     "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
     "prettier": "^2.6.2",
     "tmp": "^0.2.1",
     "zx": "^6.1.0"
