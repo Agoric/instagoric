@@ -297,6 +297,8 @@ spec:
                   name: otel-config
                   key: OTEL_EXPORTER_OTLP_ENDPOINT
                   optional: true
+            - name: CLUSTER_NAME
+              value: "$CLUSTER_NAME"
           ports:
             - containerPort: 26656
               name: p2p
