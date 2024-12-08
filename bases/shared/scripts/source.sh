@@ -29,6 +29,7 @@ export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export AGORIC_HOME="/state/$CHAIN_ID"
 export APP_LOG_FILE="/state/app_${BOOT_TIME}.log"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
+export CONTEXTUAL_SLOGFILE="/state/contextual_slogs_${BOOT_TIME}.json"
 export DD_ENV="$CHAIN_ID"
 # shellcheck disable=SC2155
 export DD_VERSION=$(tr '\n' ' ' < "$SDK_ROOT_PATH/packages/solo/public/git-revision.txt" )

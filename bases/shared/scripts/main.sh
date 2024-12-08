@@ -99,14 +99,14 @@ EOF
         # shellcheck disable=SC2207
         FILES=($(
             find "$STATE_DIRECTORY_PATH" -type f | \
-            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|(slogfile_[0-9]+\.json)' | \
+            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|((slogfile|contextual_slogs)_[0-9]+\.json)' | \
             awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
         ))
 
         for file in "${FILES[@]}"
         do
             file_path="$STATE_DIRECTORY_PATH/$file"
-            if [ "$file_path" != "$APP_LOG_FILE" ] && [ "$file_path" != "$OTEL_LOG_FILE" ] && [ "$file_path" != "$SERVER_LOG_FILE" ] && [ "$file_path" != "$SLOGFILE" ]
+            if [ "$file_path" != "$APP_LOG_FILE" ] && [ "$file_path" != "$OTEL_LOG_FILE" ] && [ "$file_path" != "$SERVER_LOG_FILE" ] && [ "$file_path" != "$SLOGFILE" ] && [ "$file_path" != "$CONTEXTUAL_SLOGFILE" ]
             then
                 upload_and_remove_file "$file" &
             fi
@@ -133,6 +133,7 @@ ln --force --symbolic "$APP_LOG_FILE" /state/app.log
 ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
 ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
 ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
+ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
 
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
