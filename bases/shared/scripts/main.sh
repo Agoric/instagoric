@@ -938,22 +938,33 @@ case "$ROLE" in
         start_chain --iavl-disable-fastnode false
         ;;
     "follower")
-        (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
-        if [[ ! -f "/state/follower-initialized" ]]; then
-            cd /state/
-            if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
-                apt install -y axel
-                axel --quiet -n 10 -o "$MAINNET_SNAPSHOT" "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" || exit 1
-            fi
+        (WHALE_KEYNAME=dummy POD_NAME="$ROLE" start_helper &)
+        if [ ! -f "/state/follower-initialized" ]
+        then
             apt update
-            apt install lz4
-            lz4 -c -d "$MAINNET_SNAPSHOT"  | tar -x -C $AGORIC_HOME
-            wget -O addrbook.json "$MAINNET_ADDRBOOK_URL"
-            cp -f addrbook.json "$AGORIC_HOME/config/addrbook.json"
+            apt install lz4 --yes > /dev/null
+
+            if [ ! -f "/state/$MAINNET_SNAPSHOT" ]
+            then
+                curl "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" \
+                 --location --output "/state/$MAINNET_SNAPSHOT" || exit 1
+                tar --directory "$AGORIC_HOME" --extract \
+                 --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
+            fi
+
+            curl "$MAINNET_ADDRBOOK_URL" --output "/state/addrbook.json"
+            cp "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json" --force
+
             # disable rosetta
-            cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
-            mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
-            sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
+            cat $AGORIC_HOME/config/app.toml | \
+            tr '\n' '\r' | \
+            sed --expression 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | \
+            tr '\r' '\n' | \
+            tee $AGORIC_HOME/config/app-new.toml
+
+            mv $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml --force
+
+            sed 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml --in-place
             touch /state/follower-initialized
         fi
 
