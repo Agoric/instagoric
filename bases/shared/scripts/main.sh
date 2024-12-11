@@ -948,6 +948,10 @@ case "$ROLE" in
             then
                 curl "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" \
                  --location --output "/state/$MAINNET_SNAPSHOT" || exit 1
+            fi
+
+            if [ ! -d "$AGORIC_HOME" ]
+            then
                 tar --directory "$AGORIC_HOME" --extract \
                  --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
             fi
@@ -956,15 +960,9 @@ case "$ROLE" in
             cp "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json" --force
 
             # disable rosetta
-            cat $AGORIC_HOME/config/app.toml | \
-            tr '\n' '\r' | \
-            sed --expression 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | \
-            tr '\r' '\n' | \
-            tee $AGORIC_HOME/config/app-new.toml
-
-            mv $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml --force
-
-            sed 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml --in-place
+            cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
+            mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
+            sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
             touch /state/follower-initialized
         fi
 
