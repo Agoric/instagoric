@@ -456,6 +456,7 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
+        # (cd /state/root/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
         (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
@@ -944,18 +945,6 @@ case "$ROLE" in
             apt update
             apt install lz4 --yes > /dev/null
 
-            if [ ! -f "/state/$MAINNET_SNAPSHOT" ]
-            then
-                curl "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" \
-                 --location --output "/state/$MAINNET_SNAPSHOT" || exit 1
-            fi
-
-            if [ ! -d "$AGORIC_HOME" ]
-            then
-                tar --directory "$AGORIC_HOME" --extract \
-                 --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
-            fi
-
             curl "$MAINNET_ADDRBOOK_URL" --output "/state/addrbook.json"
             cp "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json" --force
 
@@ -963,10 +952,112 @@ case "$ROLE" in
             cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/'  | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
             mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
             sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
-            touch /state/follower-initialized
+
+            curl "https://main.agoric.net/genesis.json" \
+             --location --output "$AGORIC_HOME/config/genesis.json"
+
+            cat <<< $(
+                jq 'if (.app_state.staking.params | has("min_commission_rate") | not) then .app_state.staking.params += {"min_commission_rate": "0.000000000000000000"} else . end' \
+                "$AGORIC_HOME/config/genesis.json"
+            ) > "$AGORIC_HOME/config/genesis.json"
+
+            # cat <<< $(
+            #     jq '.initial_height = "17650000" | .genesis_time = "2024-12-14T16:52:58.008677Z"' \
+            #     "$AGORIC_HOME/config/genesis.json"
+            # ) > "$AGORIC_HOME/config/genesis.json"
+
+            cat <<< $(
+                jq '.app_state.gov.proposals |= map(
+                        .final_tally_result.abstain_count = .final_tally_result.abstain | del(.final_tally_result.abstain) |
+                        .final_tally_result.no_count = .final_tally_result.no | del(.final_tally_result.no) |
+                        .final_tally_result.no_with_veto_count = .final_tally_result.no_with_veto | del(.final_tally_result.no_with_veto) |
+                        .final_tally_result.yes_count = .final_tally_result.yes | del(.final_tally_result.yes) |
+                        .id = .proposal_id | del(.proposal_id) |
+                        del(.content)
+                    )' "$AGORIC_HOME/config/genesis.json"
+            ) > "$AGORIC_HOME/config/genesis.json"
+
+            cat <<< $(
+                jq '.app_state += {
+                        "swingset": {
+                            "params": {
+                                "beans_per_unit": [
+                                    { "beans": "800000000", "key": "blockComputeLimit" },
+                                    { "beans": "1000000000000", "key": "feeUnit" },
+                                    { "beans": "10000000000", "key": "inboundTx" },
+                                    { "beans": "1000000000", "key": "message" },
+                                    { "beans": "20000000", "key": "messageByte" },
+                                    { "beans": "200000000000", "key": "minFeeDebit" },
+                                    { "beans": "2000000000", "key": "storageByte" },
+                                    { "beans": "30000000", "key": "vatCreation" },
+                                    { "beans": "100", "key": "xsnapComputron" },
+                                    { "beans": "1000000000000", "key": "smartWalletProvision" }
+                                ],
+                                "bootstrap_vat_config": "@agoric/vm-config/decentral-core-config.json",
+                                "fee_unit_price": [{ "amount": "1000000", "denom": "uist" }],
+                                "power_flag_fees": [
+                                    {
+                                        "fee": [{ "amount": "10000000", "denom": "ubld" }],
+                                        "power_flag": "SMART_WALLET"
+                                    }
+                                ],
+                                "queue_max": [{ "key": "inbound", "size": 1000 }]
+                            },
+                            "state": { "queue_allowed": [] },
+                            "swing_store_export_data": []
+                        }
+                    }' "$AGORIC_HOME/config/genesis.json"
+            ) > "$AGORIC_HOME/config/genesis.json"
+
+            cat "$AGORIC_HOME/config/genesis.json"
+
+            # agd tendermint unsafe-reset-all \
+            #  --home "$AGORIC_HOME" --keep-addr-book
+
+            # if [ ! -f "/state/$MAINNET_SNAPSHOT" ]
+            # then
+            #     curl "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT" \
+            #      --location --output "/state/$MAINNET_SNAPSHOT" || exit 1
+            # fi
+
+            # if [ ! -d "$AGORIC_HOME" ]
+            # then
+            #     tar --directory "$AGORIC_HOME" --extract \
+            #      --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
+            # fi
+
+            sed 's/^iavl-disable-fastnode = false/iavl-disable-fastnode = true/' "$AGORIC_HOME/config/app.toml" --in-place
+            cat "$AGORIC_HOME/config/app.toml"
+
+            SNAP_RPC="https://agoric-rpc.polkachu.com:443"
+
+            LATEST_HEIGHT=$(curl -s $SNAP_RPC/block | jq -r .result.block.header.height); \
+            BLOCK_HEIGHT=$((LATEST_HEIGHT - 2000)); \
+            TRUST_HASH=$(curl -s "$SNAP_RPC/block?height=$BLOCK_HEIGHT" | jq -r .result.block_id.hash)
+
+            sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1true| ; \
+            s|^(rpc_servers[[:space:]]+=[[:space:]]+).*$|\1\"$SNAP_RPC,$SNAP_RPC\"| ; \
+            s|^(trust_height[[:space:]]+=[[:space:]]+).*$|\1$BLOCK_HEIGHT| ; \
+            s|^(trust_hash[[:space:]]+=[[:space:]]+).*$|\1\"$TRUST_HASH\"|" $AGORIC_HOME/config/config.toml
+
+            agd tendermint unsafe-reset-all \
+             --home "$AGORIC_HOME" --keep-addr-book
+
+            # sed '/\[statesync\]/,/\[/{ s/^enable = false/enable = true/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            # sed '/\[statesync\]/,/\[/{ s/^rpc_servers = ""/rpc_servers = "https:\/\/agoric.rpc.kjnodes.com:443,https:\/\/agoric-rpc.polkachu.com:443"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            # sed '/\[statesync\]/,/\[/{ s/^trust_height = 0/trust_height = 17650000/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            # sed '/\[statesync\]/,/\[/{ s/^trust_hash = ""/trust_hash = "1F7EBCFA77641C30205885CE90E010512E5B0BE7671A7DCEEB5016AD6991350C"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            # sed '/\[p2p\]/,/\[/{ s|^persistent_peers = ""|persistent_peers = "d9bfa29e0cf9c4ce0cc9c26d98e5d97228f93b0b@agoric.rpc.kjnodes.com:12756"| }' "$AGORIC_HOME/config/config.toml" --in-place
+
+            cat "$AGORIC_HOME/config/config.toml"
+
+            touch /state/follower-initialized /state/hang
         fi
 
-        /bin/bash /entrypoint/cron.sh
+        # /bin/bash /entrypoint/cron.sh
+
+        # SDK_PATH=/state/root/agoric-sdk
+        # ln "$SDK_PATH/packages/cosmic-swingset/bin/ag-chain-cosmos" "$SDK_PATH/golang/cosmos/build/agd" /usr/local/bin/ --force --symbolic
 
         export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
         start_chain
