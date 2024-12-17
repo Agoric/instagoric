@@ -64,7 +64,9 @@ if (FAKE) {
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
   await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  process.env.AGORIC_HOME = tmpDir;
+  if(!process.env.AGORIC_HOME){
+    process.env.AGORIC_HOME = tmpDir;
+  }
 }
 
 const agoricHome = process.env.AGORIC_HOME;
@@ -82,18 +84,18 @@ const namespace =
     flag: 'r',
   });
 
-const revision =
-  process.env.AG0_MODE === 'true'
-    ? 'ag0'
-    : fs
-      .readFileSync(
-        '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
-        {
+let revision;
+if (FAKE) {
+  revision = 'fake_revision';
+} else {
+  revision =
+    process.env.AG0_MODE === 'true'
+      ? 'ag0'
+      : fs.readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
           encoding: 'utf8',
           flag: 'r',
-        },
-      )
-      .trim();
+        }).trim();
+}
 
 /**
  * @param {string} relativeUrl
@@ -258,8 +260,10 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
-  const logsQuery = { "62l": { "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
-  const logsUrl = `https://${netname}.logs${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const gcloudLoggingDatasource = 'P470A85C5170C7A1D'
+  const logsQuery = { "62l": { "datasource": gcloudLoggingDatasource, "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
+  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
+  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -284,7 +288,8 @@ gRPC: <a href="https://${netname}.grpc${domain}">https://${netname}.grpc${domain
 API: <a href="https://${netname}.api${domain}">https://${netname}.api${domain}</a>
 Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.explorer${domain}</a>
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
-Logs: <a href=${logsUrl}>https://${netname}.logs${domain}</a>
+Logs: <a href=${logsUrl}>Click Here</a>
+Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
 VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
 
 UIs:
@@ -525,7 +530,7 @@ const startFaucetWorker = async () => {
       console.log(`dequeued address ${address}`);
       const request = addressToRequest.get(address);
 
-      const [response, command, clientType, denoms] = request;
+      const [response, command, clientType, denoms, amount] = request;
       let exitCode = 1;
       let txHash = '';
 
@@ -554,7 +559,11 @@ const startFaucetWorker = async () => {
           break;
         }
         case COMMANDS["CUSTOM_DENOMS_LIST"]: {
-          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(BASE_AMOUNT, Array.isArray(denoms) ? denoms : [denoms]));
+          let tokenAmount = BASE_AMOUNT;
+          if (amount) {
+            tokenAmount = String(Number(amount) * 1000_000);
+          }
+          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(tokenAmount, Array.isArray(denoms) ? denoms : [denoms]));
             break;
 
         }
@@ -598,7 +607,8 @@ faucetapp.get('/', async (req, res) => {
     denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
   })
   const denomsDropDownHtml =`<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`
-  
+  const maxTokenAmount = 100;
+
   const clientText = !AG0_MODE
     ? `<input type="radio" id="client" name="command" value=${COMMANDS["SEND_AND_PROVISION_IST"]} onclick="toggleRadio(event)">
 <label for="client">send IST and provision </label>
@@ -624,16 +634,18 @@ faucetapp.get('/', async (req, res) => {
     <style>
       
       .dropdown {
-      overflow: scroll;
-      height: 120px;
-      width: fit-content;
+        overflow: scroll;
+        height: 120px;
+        width: fit-content;
       }
 
       .dropdown-content {
         display: block;
         background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        min-width: 160px; 
+        border: 1px solid #ccc;
+        padding: 10px;
+        box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.2);
       }
 
       .dropdown-content label {
@@ -661,6 +673,16 @@ ${clientText}
 <br>
 <div id='denoms' class="denomsClass"> 
 Denoms: ${denomsDropDownHtml} <br> <br>
+<label for="amount">Amount:</label>
+<input type="number" id="amount" 
+       name="amount" 
+       step="any" 
+       placeholder="Enter amount" 
+       max="${maxTokenAmount}" 
+       value="25"> 
+<br> 
+<small>The default amount is 25, but you can enter any value up to ${maxTokenAmount}.</small>
+<br> <br>
 </div>
 <input type="submit" />
 </form>
@@ -682,19 +704,30 @@ faucetapp.use(
 );
 
 faucetapp.post('/go', (req, res) => {
-  const { command, address, clientType, denoms } = req.body;
+  const { command, address, clientType, denoms, amount } = req.body;
 
-  if (
-    ((command === COMMANDS["SEND_AND_PROVISION_IST"] || command === 'client' &&
-      ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
-      command === 'delegate' || command === COMMANDS['SEND_BLD/IBC'] ||
-      command === COMMANDS["FUND_PROV_POOL"] ||
-      command === COMMANDS["CUSTOM_DENOMS_LIST"] && denoms && denoms.length > 0) &&
-    (command === COMMANDS["FUND_PROV_POOL"] || (typeof address === 'string' &&
-    address.length === 45 &&
-    /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
+  const MAX_AMOUNT = 100;
+
+  if (amount > MAX_AMOUNT) {
+    res
+      .status(400)
+      .json({ error: `Amount exceeds maximum limit of ${MAX_AMOUNT}` });
+  } else if (
+    (command === COMMANDS['SEND_AND_PROVISION_IST'] ||
+      (command === 'client' &&
+        ['SMART_WALLET', 'REMOTE_WALLET'].includes(clientType)) ||
+      command === 'delegate' ||
+      command === COMMANDS['SEND_BLD/IBC'] ||
+      command === COMMANDS['FUND_PROV_POOL'] ||
+      (command === COMMANDS['CUSTOM_DENOMS_LIST'] &&
+        denoms &&
+        denoms.length > 0)) &&
+    (command === COMMANDS['FUND_PROV_POOL'] ||
+      (typeof address === 'string' &&
+        address.length === 45 &&
+        /^agoric1[0-9a-zA-Z]{38}$/.test(address)))
   ) {
-    addRequest(address, [res, command, clientType, denoms]);
+    addRequest(address, [res, command, clientType, denoms, amount]);
   } else {
     res.status(403).send('invalid form');
   }
