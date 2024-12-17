@@ -1029,25 +1029,25 @@ case "$ROLE" in
             sed 's/^iavl-disable-fastnode = false/iavl-disable-fastnode = true/' "$AGORIC_HOME/config/app.toml" --in-place
             cat "$AGORIC_HOME/config/app.toml"
 
-            SNAP_RPC="https://agoric-rpc.polkachu.com:443"
+            # SNAP_RPC="https://agoric-rpc.polkachu.com:443"
 
-            LATEST_HEIGHT=$(curl -s $SNAP_RPC/block | jq -r .result.block.header.height); \
-            BLOCK_HEIGHT=$((LATEST_HEIGHT - 2000)); \
-            TRUST_HASH=$(curl -s "$SNAP_RPC/block?height=$BLOCK_HEIGHT" | jq -r .result.block_id.hash)
+            # LATEST_HEIGHT=$(curl -s $SNAP_RPC/block | jq -r .result.block.header.height); \
+            # BLOCK_HEIGHT=$((LATEST_HEIGHT - 2000)); \
+            # TRUST_HASH=$(curl -s "$SNAP_RPC/block?height=$BLOCK_HEIGHT" | jq -r .result.block_id.hash)
 
-            sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1true| ; \
-            s|^(rpc_servers[[:space:]]+=[[:space:]]+).*$|\1\"$SNAP_RPC,$SNAP_RPC\"| ; \
-            s|^(trust_height[[:space:]]+=[[:space:]]+).*$|\1$BLOCK_HEIGHT| ; \
-            s|^(trust_hash[[:space:]]+=[[:space:]]+).*$|\1\"$TRUST_HASH\"|" $AGORIC_HOME/config/config.toml
+            # sed -i.bak -E "s|^(enable[[:space:]]+=[[:space:]]+).*$|\1true| ; \
+            # s|^(rpc_servers[[:space:]]+=[[:space:]]+).*$|\1\"$SNAP_RPC,$SNAP_RPC\"| ; \
+            # s|^(trust_height[[:space:]]+=[[:space:]]+).*$|\1$BLOCK_HEIGHT| ; \
+            # s|^(trust_hash[[:space:]]+=[[:space:]]+).*$|\1\"$TRUST_HASH\"|" $AGORIC_HOME/config/config.toml
+
+            sed '/\[statesync\]/,/\[/{ s/^enable = false/enable = true/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            sed '/\[statesync\]/,/\[/{ s/^rpc_servers = ""/rpc_servers = "https:\/\/agoric.rpc.kjnodes.com:443,https:\/\/agoric-rpc.polkachu.com:443"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            sed '/\[statesync\]/,/\[/{ s/^trust_height = 0/trust_height = 17650000/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            sed '/\[statesync\]/,/\[/{ s/^trust_hash = ""/trust_hash = "1F7EBCFA77641C30205885CE90E010512E5B0BE7671A7DCEEB5016AD6991350C"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            # sed '/\[p2p\]/,/\[/{ s|^persistent_peers = ""|persistent_peers = "d9bfa29e0cf9c4ce0cc9c26d98e5d97228f93b0b@agoric.rpc.kjnodes.com:12756"| }' "$AGORIC_HOME/config/config.toml" --in-place
 
             agd tendermint unsafe-reset-all \
              --home "$AGORIC_HOME" --keep-addr-book
-
-            # sed '/\[statesync\]/,/\[/{ s/^enable = false/enable = true/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            # sed '/\[statesync\]/,/\[/{ s/^rpc_servers = ""/rpc_servers = "https:\/\/agoric.rpc.kjnodes.com:443,https:\/\/agoric-rpc.polkachu.com:443"/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            # sed '/\[statesync\]/,/\[/{ s/^trust_height = 0/trust_height = 17650000/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            # sed '/\[statesync\]/,/\[/{ s/^trust_hash = ""/trust_hash = "1F7EBCFA77641C30205885CE90E010512E5B0BE7671A7DCEEB5016AD6991350C"/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            # sed '/\[p2p\]/,/\[/{ s|^persistent_peers = ""|persistent_peers = "d9bfa29e0cf9c4ce0cc9c26d98e5d97228f93b0b@agoric.rpc.kjnodes.com:12756"| }' "$AGORIC_HOME/config/config.toml" --in-place
 
             cat "$AGORIC_HOME/config/config.toml"
 
