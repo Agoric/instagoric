@@ -456,8 +456,8 @@ start_chain () {
             extra=" -r dd-trace/init"
             #export SWINGSET_WORKER_TYPE=local
         fi
-        # (cd /state/root/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
+        (cd /state/root/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format json $@  >> "$APP_LOG_FILE" 2>&1)
+        # (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
     fi
@@ -1009,7 +1009,7 @@ case "$ROLE" in
                     }' "$AGORIC_HOME/config/genesis.json"
             ) > "$AGORIC_HOME/config/genesis.json"
 
-            cat "$AGORIC_HOME/config/genesis.json"
+            # cat "$AGORIC_HOME/config/genesis.json"
 
             # agd tendermint unsafe-reset-all \
             #  --home "$AGORIC_HOME" --keep-addr-book
@@ -1026,8 +1026,8 @@ case "$ROLE" in
             #      --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
             # fi
 
-            sed 's/^iavl-disable-fastnode = false/iavl-disable-fastnode = true/' "$AGORIC_HOME/config/app.toml" --in-place
-            cat "$AGORIC_HOME/config/app.toml"
+            # sed 's/^iavl-disable-fastnode = false/iavl-disable-fastnode = true/' "$AGORIC_HOME/config/app.toml" --in-place
+            # cat "$AGORIC_HOME/config/app.toml"
 
             # SNAP_RPC="https://agoric-rpc.polkachu.com:443"
 
@@ -1042,14 +1042,30 @@ case "$ROLE" in
 
             sed '/\[statesync\]/,/\[/{ s/^enable = false/enable = true/ }' "$AGORIC_HOME/config/config.toml" --in-place
             sed '/\[statesync\]/,/\[/{ s/^rpc_servers = ""/rpc_servers = "https:\/\/agoric.rpc.kjnodes.com:443,https:\/\/agoric-rpc.polkachu.com:443"/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            sed '/\[statesync\]/,/\[/{ s/^trust_height = 0/trust_height = 17650000/ }' "$AGORIC_HOME/config/config.toml" --in-place
-            sed '/\[statesync\]/,/\[/{ s/^trust_hash = ""/trust_hash = "1F7EBCFA77641C30205885CE90E010512E5B0BE7671A7DCEEB5016AD6991350C"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            sed '/\[statesync\]/,/\[/{ s/^trust_height = 0/trust_height = 17680000/ }' "$AGORIC_HOME/config/config.toml" --in-place
+            sed '/\[statesync\]/,/\[/{ s/^trust_hash = ""/trust_hash = "E2646E2A7B1B29D12B190F926132AD9C93FBFAC32E8AC00D781DB0E2BBF7F17A"/ }' "$AGORIC_HOME/config/config.toml" --in-place
+
             # sed '/\[p2p\]/,/\[/{ s|^persistent_peers = ""|persistent_peers = "d9bfa29e0cf9c4ce0cc9c26d98e5d97228f93b0b@agoric.rpc.kjnodes.com:12756"| }' "$AGORIC_HOME/config/config.toml" --in-place
 
-            agd tendermint unsafe-reset-all \
-             --home "$AGORIC_HOME" --keep-addr-book
+            # agd tendermint unsafe-reset-all \
+            #  --home "$AGORIC_HOME" --keep-addr-book
 
-            cat "$AGORIC_HOME/config/config.toml"
+            # cat "$AGORIC_HOME/config/config.toml"
+
+            PERSISTENT_ROOT_PATH="/state/root"
+            ROOT_PATH="/root"
+            SDK_PATH="$PERSISTENT_ROOT_PATH/agoric-sdk"
+            cd "$PERSISTENT_ROOT_PATH" && ./install-go.sh
+            export PATH="/usr/local/go/bin:${PATH}"
+            mkdir "$PERSISTENT_ROOT_PATH/go" --parents
+            ln "$PERSISTENT_ROOT_PATH/go" "$ROOT_PATH" \
+             --force --symbolic
+            ls -al
+            ./initial.sh
+            ./generate-builds.sh
+            ln "$SDK_PATH/packages/cosmic-swingset/bin/ag-chain-cosmos" "$SDK_PATH/golang/cosmos/build/agd" /usr/local/bin/ \
+             --force --symbolic
+            # cat /state/root/go/pkg/mod/github.com/agoric-labs/cometbft@v0.34.30-alpha.agoric.1/p2p/conn/connection.go
 
             touch /state/follower-initialized /state/hang
         fi
