@@ -96,11 +96,10 @@ EOF
             fi
         }
 
-        # shellcheck disable=SC2207
+        # shellcheck disable=SC2207,SC2010
         FILES=($(
-            find "$STATE_DIRECTORY_PATH" -type f | \
-            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|(slogfile_[0-9]+\.json)' | \
-            awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
+            ls "$STATE_DIRECTORY_PATH" | \
+            grep --extended-regexp '^[[:alnum:]]+(_[[:alnum:]]+)*_[[:digit:]]+\.(log|json)+$'
         ))
 
         for file in "${FILES[@]}"
