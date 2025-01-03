@@ -2,8 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: explorer
-  annotations:
-    ad.datadoghq.com/explorer.logs: '[{"source":"explorer","service":"instagoric"}]'
 spec:
   selector:
     matchLabels:
