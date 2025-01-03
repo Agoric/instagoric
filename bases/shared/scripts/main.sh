@@ -324,11 +324,7 @@ wait_till_syncup_and_fund () {
             if status=$($(ag_binary) status --home="$AGORIC_HOME"); then
                 if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
                     if [[ $parsed == "false" ]]; then
-                        if [[ $DD_PROFILING_ENABLED == "true" ]]; then
-                            sleep 300
-                        else
-                            sleep 30
-                        fi
+                        sleep 30
                         stakeamount="400000000ibc/toyusdc"
 
                         $(ag_binary) tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
@@ -450,12 +446,7 @@ start_chain () {
     auto_approve &
 
     if [[ -z "$AG0_MODE" ]]; then 
-        extra=""
-        if [[ "$DD_PROFILING_ENABLED" == "true" ]]; then
-            extra=" -r dd-trace/init"
-            #export SWINGSET_WORKER_TYPE=local
-        fi
-        (cd /usr/src/agoric-sdk && node $extra /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
+        (cd /usr/src/agoric-sdk && node /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@  >> "$APP_LOG_FILE" 2>&1)
     else
         $(ag_binary) start --home="$AGORIC_HOME" --log_format=json $@ >> "$APP_LOG_FILE" 2>&1
     fi
@@ -571,11 +562,6 @@ start_otel_server() {
         )
         ARCHITECTURE="$(dpkg --print-architecture)"
 
-        ddtracetarget=""
-        if [[ $DD_TRACE_ENABLED == "true" ]]; then
-            ddtracetarget=", otlphttp/datadogagent"
-        fi
-
         echo "starting telemetry collector"
         export CONTAINER_ID="$container_id"
 
@@ -585,9 +571,6 @@ start_otel_server() {
         sed "$OTEL_CONFIG" \
          --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
          --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-         --expression "s/@DD_API_KEY@/${DD_API_KEY}/" \
-         --expression "s/@DD_SITE@/${DD_SITE}/" \
-         --expression "s|@DD_TRACES@|${ddtracetarget}|" \
          --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
          --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
          --expression "s/@NAMESPACE@/${NAMESPACE}/" \
