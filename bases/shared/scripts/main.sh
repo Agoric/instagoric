@@ -1,10 +1,17 @@
 #!/bin/bash
-set -x
+
 set +e
 
 CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 
+# shellcheck source=./source.sh
 source "$CURRENT_DIRECTORY_PATH/source.sh"
+
+# shellcheck source=./logs-cleanup.sh
+/bin/bash "$CURRENT_DIRECTORY_PATH/logs-cleanup.sh" \
+ "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
+
+set -x
 
 mkdir --parents "$AGORIC_HOME" "$TMPDIR"
 # shellcheck disable=SC2086,SC2115
@@ -19,115 +26,6 @@ resolved_config=$(echo "$BOOTSTRAP_CONFIG" | sed 's_@agoric_/usr/src/agoric-sdk/
 resolved_basename=$(basename "$resolved_config")
 source_config="/config/network/$resolved_basename"
 test ! -e "$source_config" || cp "$source_config" "$resolved_config"
-
-backup_log_files_and_cleanup() {
-    SERVICE_ACCOUNT_JSON="/config/secrets/logs-backup.json"
-    if [ -f "$SERVICE_ACCOUNT_JSON" ]
-    then
-        BUCKET_NAME="agoric-chain-logs"
-        SCOPES="https://www.googleapis.com/auth/devstorage.read_write"
-        STATE_DIRECTORY_PATH=/state
-        TOKEN_URI="https://oauth2.googleapis.com/token"
-
-        base64url_encode() {
-            openssl base64 -e -A | \
-            tr '+/' '-_' | \
-            tr -d '='
-        }
-
-        CLIENT_EMAIL=$(
-            jq '.client_email' \
-            --raw-output < $SERVICE_ACCOUNT_JSON
-        )
-        PRIVATE_KEY=$(
-            jq '.private_key' \
-            --raw-output < $SERVICE_ACCOUNT_JSON | \
-            sed 's/\\n/\n/g'
-        )
-
-        HEADER='{"alg":"RS256","typ":"JWT"}'
-        ISSUER="$CLIENT_EMAIL"
-        AUDIENCE="$TOKEN_URI"
-        EXPIRATION=$(("$BOOT_TIME"+3600))
-        ISSUED_AT="$BOOT_TIME"
-
-        PAYLOAD=$(cat <<EOF
-{ "aud": "$AUDIENCE", "exp": $EXPIRATION, "iat": $ISSUED_AT, "iss": "$ISSUER", "scope": "$SCOPES" }
-EOF
-        )
-
-        HEADER_BASE64=$(echo -n "$HEADER" | base64url_encode)
-        PAYLOAD_BASE64=$(echo -n "$PAYLOAD" | base64url_encode)
-
-        SIGNATURE=$(
-            echo -n "${HEADER_BASE64}.${PAYLOAD_BASE64}" | \
-            openssl dgst -sha256 -sign <(echo -n "$PRIVATE_KEY") | \
-            base64url_encode
-        )
-
-        JWT="${HEADER_BASE64}.${PAYLOAD_BASE64}.${SIGNATURE}"
-
-        ACCESS_TOKEN=$(
-            curl $TOKEN_URI \
-            --data "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=$JWT" \
-            --header "Content-Type: application/x-www-form-urlencoded" --silent --request POST | \
-            jq --raw-output '.access_token'
-        )
-
-        upload_and_remove_file() {
-            FILE_PATH="$STATE_DIRECTORY_PATH/$1"
-            OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$1"
-            FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
-
-            echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
-            HTTP_CODE=$(
-                curl "https://storage.googleapis.com/upload/storage/v1/b/$BUCKET_NAME/o?name=$OBJECT_NAME&uploadType=media" \
-                 --header "Authorization: Bearer $ACCESS_TOKEN" --output /dev/null --request POST \
-                 --silent --upload-file "$FILE_PATH" --write-out "%{http_code}"
-            )
-
-            # shellcheck disable=SC2181
-            if (($?)) || [ ! "$HTTP_CODE" -eq 200 ]
-            then
-                echo "Failed to upload file '$FILE_PATH'"
-            else
-                echo "Deleting file '$FILE_PATH'"
-                rm --force "$FILE_PATH"
-            fi
-        }
-
-        # shellcheck disable=SC2207
-        FILES=($(
-            find "$STATE_DIRECTORY_PATH" -type f | \
-            grep --extended-regexp '((app|otel|server)_[0-9]+\.log)|((slogfile|contextual_slogs)_[0-9]+\.json)' | \
-            awk -F'[_/.]' '{printf("%s_%s.%s\n", $3, $4, $5)}'
-        ))
-
-        for file in "${FILES[@]}"
-        do
-            file_path="$STATE_DIRECTORY_PATH/$file"
-            if [ "$file_path" != "$APP_LOG_FILE" ] && [ "$file_path" != "$OTEL_LOG_FILE" ] && [ "$file_path" != "$SERVER_LOG_FILE" ] && [ "$file_path" != "$SLOGFILE" ] && [ "$file_path" != "$CONTEXTUAL_SLOGFILE" ]
-            then
-                upload_and_remove_file "$file" &
-            fi
-        done
-
-        OLDER_FILES=(app.log server.log otel.log)
-
-        for file in "${OLDER_FILES[@]}"
-        do
-            file_path="$STATE_DIRECTORY_PATH/$file"
-            if [ -f "$file_path" ] && [ ! -h "$file_path" ]
-            then
-                backup_file_path=$(echo "$file_path" | awk -F'[_/.]' '{printf("%s_old.%s\n", $3, $4)}')
-                mv "$file_path" "$STATE_DIRECTORY_PATH/$backup_file_path"
-                upload_and_remove_file "$backup_file_path" &
-            fi
-        done
-    fi
-}
-
-backup_log_files_and_cleanup
 
 ln --force --symbolic "$APP_LOG_FILE" /state/app.log
 ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
