@@ -27,6 +27,7 @@ export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export AGORIC_HOME="/state/$CHAIN_ID"
 export APP_LOG_FILE="/state/app_${BOOT_TIME}.log"
 export BOOTSTRAP_CONFIG=${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}
+export CONTEXTUAL_SLOGFILE="/state/contextual_slogs_${BOOT_TIME}.json"
 export MODIFIED_BOOTSTRAP_PATH="$SDK_ROOT_PATH/packages/vats/modified-bootstrap.json"
 export OTEL_LOG_FILE="/state/otel_${BOOT_TIME}.log"
 export SERVER_LOG_FILE="/state/server_${BOOT_TIME}.log"
