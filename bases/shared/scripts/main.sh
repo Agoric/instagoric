@@ -9,7 +9,7 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
 
 # shellcheck source=./logs-cleanup.sh
 /bin/bash "$CURRENT_DIRECTORY_PATH/logs-cleanup.sh" \
- "$APP_LOG_FILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
+ "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
 
 set -x
 
@@ -31,6 +31,7 @@ ln --force --symbolic "$APP_LOG_FILE" /state/app.log
 ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
 ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
 ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
+ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
 
 ag_binary () {
     if [[ -z "$AG0_MODE" ]]; then 
