@@ -15,17 +15,6 @@ spec:
     metadata:
       labels:
         app: node
-      annotations:
-        ad.datadoghq.com/log-app.logs: |
-          [{"source": "agd", "service":"agd"}]
-        ad.datadoghq.com/log-slog.logs: |
-          [{"source": "slog", "service":"agd"}]
-        ad.datadoghq.com/log-otel.logs: |
-          [{"source": "otel", "service":"instagoric"}]
-        ad.datadoghq.com/log-server.logs: |
-          [{"source": "server", "service":"instagoric"}]
-        ad.datadoghq.com/node.logs: |
-          [{"source": "entrypoint", "service":"instagoric"}]
 
     spec:
       terminationGracePeriodSeconds: 10
@@ -171,30 +160,6 @@ spec:
                   name: telemetry-secrets
                   key: HONEYCOMB_API_KEY
                   optional: true
-            - name: DD_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: telemetry-secrets
-                  key: DD_API_KEY
-                  optional: true
-            - name: DD_SITE
-              valueFrom:
-                secretKeyRef:
-                  name: telemetry-secrets
-                  key: DD_SITE
-                  optional: true
-            - name: DD_TRACE_ENABLED
-              valueFrom:
-                configMapKeyRef:
-                  name: instagoric-release
-                  key: DD_TRACE_ENABLED
-                  optional: true
-            - name: DD_PROFILING_ENABLED
-              valueFrom:
-                configMapKeyRef:
-                  name: instagoric-release
-                  key: DD_PROFILING_ENABLED
-                  optional: true
             - name: ENABLE_TELEMETRY
               valueFrom:
                 secretKeyRef:
@@ -259,12 +224,6 @@ spec:
                 configMapKeyRef:
                   name: instagoric-release
                   key: SLOGSENDER_AGENT
-                  optional: true
-            - name: SLOGSENDER_AGENT_DD_PROFILING_ENABLED
-              valueFrom:
-                configMapKeyRef:
-                  name: instagoric-release
-                  key: SLOGSENDER_AGENT_DD_PROFILING_ENABLED
                   optional: true
             - name: ENDORSED_UI
               valueFrom:
