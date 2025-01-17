@@ -1,7 +1,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 
 configMapGenerator:
-  - name: relayer-helpers
+  - name: noble-relayer-helpers
     files:
       - entrypoint.sh
       - internal-chain-config.json
@@ -9,6 +9,5 @@ configMapGenerator:
 
 kind: Kustomization
 
-namespace: instagoric
 resources:
   - deployment.yaml

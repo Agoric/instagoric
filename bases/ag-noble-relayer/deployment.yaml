@@ -31,5 +31,5 @@ spec:
               name: helpers
       volumes:
         - configMap:
-            name: relayer-helpers
+            name: noble-relayer-helpers
           name: helpers
