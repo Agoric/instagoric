@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: ag-noble-relayer
+
+spec:
+  selector:
+    matchLabels:
+      app: ag-noble-relayer
+
+  template:
+    metadata:
+      labels:
+        app: ag-noble-relayer
+
+    spec:
+      containers:
+        - command:
+            - /bin/bash
+            - -x
+            - /root/scripts/entrypoint.sh
+          image: debian:bullseye
+          name: ag-noble-relayer
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+          volumeMounts:
+            - mountPath: /root/scripts
+              name: helpers
+      volumes:
+        - configMap:
+            name: relayer-helpers
+          name: helpers
