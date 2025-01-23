@@ -16,6 +16,7 @@ export NAMESPACE_PATH="/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 export OTEL_VERSION=0.96.0
 export PRIMARY_ENDPOINT="http://validator-primary.$NAMESPACE.svc.cluster.local"
 export PRIMARY_NOD_PEER_ID="fb86a0993c694c981a28fa1ebd1fd692f345348b"
+export PRIVATE_APP_PORT="8002"
 export RPC_ENDPOINT="http://rpcnodes.$NAMESPACE.svc.cluster.local"
 export SDK_ROOT_PATH=${SDK_ROOT_PATH:-"/usr/src/agoric-sdk"}
 export SEED_NOD_PEER_ID="0f04c4610b7511a64b8644944b907416db568590"
