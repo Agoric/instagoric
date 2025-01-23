@@ -11,6 +11,9 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
 /bin/bash "$CURRENT_DIRECTORY_PATH/logs-cleanup.sh" \
     "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
 
+# shellcheck source=./utils.sh
+source "$CURRENT_DIRECTORY_PATH/utils.sh"
+
 set -x
 
 mkdir --parents "$AGORIC_HOME" "$TMPDIR"
@@ -32,89 +35,6 @@ ln --force --symbolic "$OTEL_LOG_FILE" /state/otel.log
 ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
 ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
-
-primary_genesis() {
-    while true; do
-        if json=$(curl --fail -m 15 -sS "$PRIMARY_ENDPOINT:8002/genesis.json"); then
-            echo "$json"
-            break
-        fi
-        sleep 2
-    done
-}
-
-add_whale_key() {
-    keynum=${1:-0}
-    [[ -n "$WHALE_SEED" ]] || return 1
-    echo "$WHALE_SEED" | agd keys add "${WHALE_KEYNAME}_${keynum}" --index "$keynum" --recover --home "$AGORIC_HOME" --keyring-backend test
-}
-
-create_self_key() {
-    agd keys add self --home "$AGORIC_HOME" --keyring-backend test >/state/self.out 2>&1
-    tail -n1 /state/self.out >/state/self.key
-    key_address=$(agd keys show self -a --home "$AGORIC_HOME" --keyring-backend test)
-    echo "$key_address" >/state/self.address
-}
-
-get_whale_index() {
-    podnum=$(echo "$PODNAME" | grep -o '[0-9]*$')
-
-    case $PODNAME in
-    validator-primary-*)
-        echo 0
-        return
-        ;;
-    validator-*)
-        echo "$((1 + podnum))"
-        return
-        ;;
-    esac
-}
-
-get_whale_keyname() {
-    idx=$(get_whale_index)
-    echo "${WHALE_KEYNAME}_${idx}"
-}
-
-wait_till_syncup_and_register() {
-    while true; do
-        if status=$(agd status --home="$AGORIC_HOME"); then
-            if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
-                if [[ $parsed == "false" ]]; then
-                    echo "caught up, register validator"
-                    stakeamount="50000000ubld"
-                    ensure_balance "$(get_whale_keyname)" "$stakeamount"
-                    sleep 10
-                    agd tx staking create-validator \
-                        --home="$AGORIC_HOME" \
-                        --amount="${stakeamount}" \
-                        --pubkey="$(agd tendermint show-validator --home=$AGORIC_HOME)" \
-                        --moniker="$PODNAME" \
-                        --website="http://$POD_IP:26657" \
-                        --details="" \
-                        --node="$PRIMARY_ENDPOINT:26657" \
-                        --commission-rate="0.10" \
-                        --commission-max-rate="0.20" \
-                        --commission-max-change-rate="0.01" \
-                        --min-self-delegation="1" \
-                        --from=self \
-                        --keyring-backend=test \
-                        --chain-id="$CHAIN_ID" \
-                        --gas=auto \
-                        --gas-adjustment=1.4 \
-                        -y
-                    touch "$AGORIC_HOME/registered"
-
-                    sleep 10
-                    return
-                else
-                    echo "not caught up, waiting to register validator"
-                fi
-            fi
-        fi
-        sleep 5
-    done
-}
 
 wait_till_syncup_and_fund() {
     while true; do
@@ -138,42 +58,6 @@ wait_till_syncup_and_fund() {
         sleep 5
     done
 
-}
-
-ensure_balance() {
-    from=$1
-    amount=$2
-    to=${3:-$(cat /state/self.address)}
-
-    want=${amount//,/ }
-    while true; do
-        have=$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:26657" -ojson | jq -r '.balances')
-        needed=
-        sep=
-        for valueDenom in $want; do
-            read -r wantValue denom <<<"$(echo "$valueDenom" | sed -e 's/\([^0-9].*\)/ \1/')"
-            haveValue=$(echo "$have" | jq -r ".[] | select(.denom == \"$denom\") | .amount")
-            echo "$denom: have $haveValue, want $wantValue"
-            if [[ -z "$haveValue" ]]; then
-                needed="$needed$sep$wantValue$denom"
-                sep=,
-            #elif (( wantValue > haveValue )); then
-            #  needed="$needed$sep$(( wantValue - haveValue ))$denom"
-            #  sep=,
-            fi
-        done
-        if [ -z "$needed" ]; then
-            echo "$to now has at least $amount"
-            break
-        fi
-        if agd tx bank send -b block "$from" "$to" "$needed" \
-            --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test \
-            --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"; then
-            echo "successfully sent $amount to $to"
-        else
-            sleep $(((RANDOM % 50) + 10))
-        fi
-    done
 }
 
 start_helper() {
@@ -231,16 +115,6 @@ auto_approve() {
             sleep $POLL_INTERVAL
         done
     fi
-}
-
-start_chain() {
-    # shellcheck disable=SC2068
-    auto_approve &
-
-    (
-        cd /usr/src/agoric-sdk &&
-            node /usr/local/bin/ag-chain-cosmos --home "$AGORIC_HOME" start --log_format=json $@ >>"$APP_LOG_FILE" 2>&1
-    )
 }
 
 hang() {
@@ -489,7 +363,7 @@ if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
 
     else
         if [[ $ROLE != fork* ]] && [[ $ROLE != "follower" ]]; then
-            primary_genesis >$AGORIC_HOME/config/genesis.json
+            get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
         fi
     fi
     sed -i.bak 's/^log_level/# log_level/' "$AGORIC_HOME/config/config.toml"
@@ -558,7 +432,8 @@ case "$ROLE" in
     fi
 
     /bin/bash /entrypoint/cron.sh
-    start_chain
+    auto_approve &
+    start_chain "$APP_LOG_FILE"
     ;;
 
 "validator")
@@ -585,7 +460,8 @@ case "$ROLE" in
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     patch_validator_config
 
-    start_chain
+    auto_approve &
+    start_chain "$APP_LOG_FILE"
     ;;
 "ag-solo")
     sleep infinity
@@ -608,7 +484,9 @@ case "$ROLE" in
 
     # Must not run state-sync unless we have enough non-pruned state for it.
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
-    start_chain --pruning everything
+
+    auto_approve &
+    start_chain "$APP_LOG_FILE" --pruning "everything"
     ;;
 "fork1")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
@@ -617,13 +495,15 @@ case "$ROLE" in
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    start_chain --iavl-disable-fastnode false
+    auto_approve &
+    start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "fork2")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
     fork_setup agoric2
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    start_chain --iavl-disable-fastnode false
+    auto_approve &
+    start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "follower")
     (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
@@ -648,7 +528,8 @@ case "$ROLE" in
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    start_chain
+    auto_approve &
+    start_chain "$APP_LOG_FILE"
     ;;
 *)
     echo "unknown role"
