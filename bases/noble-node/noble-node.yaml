@@ -44,37 +44,34 @@ spec:
               apt-get update && apt-get install wget curl jq lz4 --yes
               NOBLE_HOME=/state/$CHAIN_ID
 
-              if ! test -f /state/nobled
-              then
-                wget https://github.com/noble-assets/noble/releases/download/v8.0.0-rc.4/nobled_linux-amd64
-                wget https://github.com/noble-assets/noble/releases/download/v8.0.0-rc.4/nobled_sha256.txt
-                BINARY_CHECKSUM=$(sha256sum nobled_linux-amd64 | cut -d ' ' -f 1)
-                EXPECTED_CHECKSUM=$(head -n 1 nobled_sha256.txt | cut -d ' ' -f 1)
-                if [ "$BINARY_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
-                  echo "Checksum mismatch!"
-                  echo "Expected: $EXPECTED_CHECKSUM"
-                  echo "Got: $BINARY_CHECKSUM"
-                  exit 1
-                fi
-                mv nobled_linux-amd64 /state/nobled
-                chmod +x /state/nobled
+              # change this to match the latest release on chain upgrade
+              wget https://github.com/noble-assets/noble/releases/download/v9.0.0-rc.1/nobled_linux-amd64
+              wget https://github.com/noble-assets/noble/releases/download/v9.0.0-rc.1/checksum.txt
+              BINARY_CHECKSUM=$(sha256sum nobled_linux-amd64 | cut -d ' ' -f 1)
+              EXPECTED_CHECKSUM=$(head -n 1 checksum.txt | cut -d ' ' -f 1)
+              if [ "$BINARY_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+                echo "Checksum mismatch!"
+                echo "Expected: $EXPECTED_CHECKSUM"
+                echo "Got: $BINARY_CHECKSUM"
+                exit 1
               fi
+              mv nobled_linux-amd64 /state/nobled
+              chmod +x /state/nobled              
+              mkdir -p $NOBLE_HOME
 
-              if ! test -d "$NOBLE_HOME/config"
-              then
-                mkdir -p $NOBLE_HOME
+              /state/nobled init $MONIKER --chain-id $CHAIN_ID --home $NOBLE_HOME
 
-                /state/nobled init $MONIKER --chain-id $CHAIN_ID --home $NOBLE_HOME
+              wget -O addrbook.json https://snapshots.polkachu.com/testnet-addrbook/noble/addrbook.json --inet4-only
+              mv addrbook.json $NOBLE_HOME/config
+              # uncomment the following line and update the snapshot tarball when redploying this node 
+              # to catch up to current state in case of halt, then comment and redeploy again so 
+              # pod restarts don't start the chain from scratch
+              # curl -o - -L https://snapshots.polkachu.com/testnet-snapshots/noble/noble_23034627.tar.lz4 | lz4 -c -d - | tar -x -C $NOBLE_HOME
 
-                wget -O addrbook.json https://snapshots.polkachu.com/testnet-addrbook/noble/addrbook.json --inet4-only
-                mv addrbook.json $NOBLE_HOME/config
-                curl -o - -L https://snapshots.polkachu.com/testnet-snapshots/noble/noble_21659721.tar.lz4 | lz4 -c -d - | tar -x -C $NOBLE_HOME
-
-                # Set the listening addresses to 0.0.0.0
-                sed -i 's|^laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|g' $NOBLE_HOME/config/config.toml
-                sed -i 's|^laddr = "tcp://127.0.0.1:1317"|laddr = "tcp://0.0.0.0:1317"|g' $NOBLE_HOME/config/app.toml
-                sed -i 's|^address = "127.0.0.1:9090"|address = "0.0.0.0:9090"|g' $NOBLE_HOME/config/app.toml
-              fi
+              # Set the listening addresses to 0.0.0.0
+              sed -i 's|^laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|g' $NOBLE_HOME/config/config.toml
+              sed -i 's|^laddr = "tcp://127.0.0.1:1317"|laddr = "tcp://0.0.0.0:1317"|g' $NOBLE_HOME/config/app.toml
+              sed -i 's|^address = "127.0.0.1:9090"|address = "0.0.0.0:9090"|g' $NOBLE_HOME/config/app.toml
 
               /state/nobled start --home $NOBLE_HOME --log_format json
           volumeMounts:
