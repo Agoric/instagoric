@@ -175,7 +175,6 @@ ensure_balance() {
         fi
     done
 }
-
 start_helper() {
     (
         SRV=/usr/src/instagoric-server
