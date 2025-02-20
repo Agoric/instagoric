@@ -11,8 +11,8 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
 /bin/bash "$CURRENT_DIRECTORY_PATH/logs-cleanup.sh" \
     "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
 
-# shellcheck source=./utils.sh
-source "$CURRENT_DIRECTORY_PATH/utils.sh"
+# shellcheck source=./util.sh
+source "$CURRENT_DIRECTORY_PATH/util.sh"
 
 set -x
 
