@@ -405,7 +405,6 @@ wait_for_pod() {
 }
 
 fork_setup() {
-    THIS_FORK=$1
     wait_for_pod "fork1"
     wait_for_pod "fork2"
 
@@ -413,20 +412,32 @@ fork_setup() {
     FORK1_IP=$(get_pod_ip "fork1")
     FORK2_IP=$(get_pod_ip "fork2")
 
-    if [ ! -f "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
-        mkdir -p $AGORIC_HOME
-        rm -rf $AGORIC_HOME/*
+    if ! test -f "/state/config-$MAINFORK_TIMESTAMP.tar.gz"; then
+        mkdir --parents "$AGORIC_HOME"
+        # shellcheck disable=SC2115,SC2086
+        rm --force --recursive $AGORIC_HOME/*
 
-        apt install -y axel
-        axel --quiet -n 10 -o "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz"
-        axel --quiet -n 10 -o "/state/agoric-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/agoric-$MAINFORK_HEIGHT.tar.gz"
+        apt install axel --yes > /dev/null
 
-        tar -xzf "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
-        tar -xzf "/state/agoric-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
+        axel --num-connections "10" --output "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --quiet \
+         "$MAINFORK_IMAGE_URL/config-$MAINFORK_TIMESTAMP.tar.gz"
+        axel --num-connections "10" --output "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --quiet \
+         "$MAINFORK_IMAGE_URL/data-$MAINFORK_TIMESTAMP.tar.gz"
+        axel --output "/state/keyring-test.tar.gz" --quiet "$MAINFORK_IMAGE_URL/keyring-test.tar.gz"
+
+        tar --extract --file "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/keyring-test.tar.gz" --gzip --directory "$AGORIC_HOME"
+
+        axel --output "/$AGORIC_HOME/data/priv_validator_state.json" --quiet \
+         "$MAINFORK_IMAGE_URL/priv_validator_state.json"
+
+        rm --force "/state/data-$MAINFORK_TIMESTAMP.tar.gz" "/state/keyring-test.tar.gz"
     fi
 
     persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
-    sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
+    sed --expression "/^persistent_peers =/s/.*/$persistent_peers/" --in-place \
+     "$AGORIC_HOME/config/config.toml"
 }
 
 start_otel_server() {
@@ -744,7 +755,7 @@ case "$ROLE" in
     ;;
 "fork1")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
-    fork_setup agoric1
+    fork_setup
 
     /bin/bash /entrypoint/cron.sh
 
@@ -753,7 +764,7 @@ case "$ROLE" in
     ;;
 "fork2")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
-    fork_setup agoric2
+    fork_setup
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     start_chain --iavl-disable-fastnode false
     ;;
