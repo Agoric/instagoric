@@ -405,6 +405,8 @@ wait_for_pod() {
 }
 
 fork_setup() {
+    local fork_name="$1"
+
     wait_for_pod "fork1"
     wait_for_pod "fork2"
 
@@ -417,19 +419,17 @@ fork_setup() {
         # shellcheck disable=SC2115,SC2086
         rm --force --recursive $AGORIC_HOME/*
 
-        apt install axel --yes > /dev/null
-
-        axel --num-connections "10" --output "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --quiet \
-         "$MAINFORK_IMAGE_URL/config-$MAINFORK_TIMESTAMP.tar.gz"
-        axel --num-connections "10" --output "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --quiet \
-         "$MAINFORK_IMAGE_URL/data-$MAINFORK_TIMESTAMP.tar.gz"
-        axel --output "/state/keyring-test.tar.gz" --quiet "$MAINFORK_IMAGE_URL/keyring-test.tar.gz"
+        curl --output "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+         "$MAINFORK_IMAGE_URL/${fork_name}_config_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+         "$MAINFORK_IMAGE_URL/agoric_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/keyring-test.tar.gz" --silent "$MAINFORK_IMAGE_URL/keyring-test.tar.gz"
 
         tar --extract --file "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
         tar --extract --file "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
         tar --extract --file "/state/keyring-test.tar.gz" --gzip --directory "$AGORIC_HOME"
 
-        axel --output "/$AGORIC_HOME/data/priv_validator_state.json" --quiet \
+        curl --output "$AGORIC_HOME/data/priv_validator_state.json" --silent \
          "$MAINFORK_IMAGE_URL/priv_validator_state.json"
 
         rm --force "/state/data-$MAINFORK_TIMESTAMP.tar.gz" "/state/keyring-test.tar.gz"
@@ -755,7 +755,7 @@ case "$ROLE" in
     ;;
 "fork1")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
-    fork_setup
+    fork_setup "agoric1"
 
     /bin/bash /entrypoint/cron.sh
 
@@ -764,7 +764,7 @@ case "$ROLE" in
     ;;
 "fork2")
     (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
-    fork_setup
+    fork_setup "agoric2"
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     start_chain --iavl-disable-fastnode false
     ;;
