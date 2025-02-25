@@ -590,20 +590,35 @@ case "$ROLE" in
     sleep infinity
     ;;
 "seed")
+    primary_validator_external_address="$(get_ips "validator-primary-ext")"
+    seed_external_address="$(get_ips "seed-ext")"
+
+    PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:26656"
+    SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:26656"
+
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
     if [[ $firstboot == "true" ]]; then
         create_self_key
-        # wait for network live
 
-        cp /config/network/seed_node_key.json "$AGORIC_HOME/config/node_key.json"
-        PEERS="$PRIMARY_NOD_PEER_ID@validator-primary.$NAMESPACE.svc.cluster.local:26656"
+        cp "/config/network/seed_node_key.json" "$AGORIC_HOME/config/node_key.json"
 
-        sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$PRIMARY_NOD_PEER_ID\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^seed_mode =.*/seed_mode = true/" "$AGORIC_HOME/config/config.toml"
+        sed "$AGORIC_HOME/config/config.toml" \
+         --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
+         --in-place.bak
+        sed "$AGORIC_HOME/config/config.toml" \
+         --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$PRIMARY_NOD_PEER_ID'|" \
+         --in-place.bak
+        sed "$AGORIC_HOME/config/config.toml" \
+         --expression "s|^seed_mode = .*|seed_mode = true|" \
+         --in-place.bak
     fi
-    external_address=$(get_ips seed-ext)
-    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
+
+    sed "$AGORIC_HOME/config/config.toml" \
+     --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
+     --in-place.bak
+    sed "$AGORIC_HOME/config/config.toml" \
+     --expression "s|^external_address = .*|external_address = '$seed_external_address:26656'|" \
+     --in-place.bak
 
     # Must not run state-sync unless we have enough non-pruned state for it.
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
