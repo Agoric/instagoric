@@ -48,7 +48,7 @@ ensure_balance() {
     want=${amount//,/ }
 
     while true; do
-        have="$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:26657" --output "json" | jq --raw-output '.balances')"
+        have="$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:$RPC_PORT" --output "json" | jq --raw-output '.balances')"
         for valueDenom in $want; do
             # shellcheck disable=SC2001
             read -r wantValue denom <<<"$(echo "$valueDenom" | sed -e 's/\([^0-9].*\)/ \1/')"
@@ -70,13 +70,67 @@ ensure_balance() {
             --chain-id "$CHAIN_ID" \
             --home "$AGORIC_HOME" \
             --keyring-backend "test" \
-            --node "${PRIMARY_ENDPOINT}:26657" \
+            --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
             --yes; then
             echo "successfully sent $amount to $to"
         else
             sleep $(((RANDOM % 50) + 10))
         fi
     done
+}
+
+get_ips() {
+    local service_name=$1
+
+    while true; do
+        if json=$(curl --fail --max-time "15" --silent --show-error "http://localhost:$PRIVATE_APP_PORT/ips"); then
+            if test "$(echo "$json" | jq --raw-output '.status')" == "1"; then
+                if ip="$(echo "$json" | jq --raw-output ".ips.$service_name")"; then
+                    echo "$ip"
+                    break
+                fi
+            fi
+        fi
+
+        sleep 2
+    done
+}
+
+get_node_info() {
+    agd status --home "$AGORIC_HOME"
+}
+
+get_pod_ip() {
+    local app_label_value="$1"
+    local pod_info
+    local pod_ip
+
+    while true; do
+        pod_info=$(
+            curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods" \
+                --cacert "$CA_PATH" \
+                --header "Authorization: Bearer $TOKEN" \
+                --insecure \
+                --show-error \
+                --silent
+        )
+        pod_ip=$(
+            echo "$pod_info" |
+                jq '.items[] | select(.metadata.labels.app == $app_label) | .status.podIP' \
+                    --arg "app_label" "$app_label_value" \
+                    --raw-output
+        )
+
+        if test -z "$pod_ip"; then
+            echo "Couldn't get Pod IP address. Trying again..." >&2
+        else
+            break
+        fi
+
+        sleep 10
+    done
+
+    echo "$pod_ip"
 }
 
 get_primary_validator_genesis() {
@@ -108,23 +162,119 @@ get_whale_keyname() {
     echo "${WHALE_KEYNAME}_$(get_whale_index)"
 }
 
+hang() {
+    local pid
+    local slept
+
+    if test -n "$HANG_FILE_PATH" && test -f "$HANG_FILE_PATH"; then
+        echo 1>&2 "$HANG_FILE_PATH exists, keeping entrypoint alive..."
+    fi
+
+    while test -z "$HANG_FILE_PATH" || test -f "$HANG_FILE_PATH"; do
+        sleep 600 &
+        pid="$!"
+
+        echo 1>&2 "still hanging: to exit kill $pid"
+        wait "$pid"
+        slept="$?"
+        test "$slept" -eq "0" || break
+    done
+}
+
 start_chain() {
-    local logFile="$1"
+    local log_file="$1"
     shift
 
-    node /usr/local/bin/ag-chain-cosmos start \
+    node "/usr/local/bin/ag-chain-cosmos" start \
         --home "$AGORIC_HOME" \
         --log_format "json" \
-        "$@" >>"$logFile" 2>&1
+        "$@" >>"$log_file" 2>&1
+}
+
+start_helper() {
+    local log_file="$1"
+    local server_directory="/usr/src/instagoric-server"
+
+    rm --force --recursive "$server_directory"
+    mkdir --parents "$server_directory" || exit
+    cp /config/server/* "$server_directory" || exit
+    (
+        cd "$server_directory" || exit
+        yarn --production
+        while true; do
+            yarn start >"$log_file" 2>&1
+            sleep 1
+        done
+    )
+}
+
+wait_for_pod() {
+    local app_label_value="$1"
+    local pod_info
+    local pod_phase
+
+    while true; do
+        pod_info=$(
+            curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods" \
+                --cacert "$CA_PATH" \
+                --header "Authorization: Bearer $TOKEN" \
+                --insecure \
+                --show-error \
+                --silent
+        )
+        pod_phase=$(
+            echo "$pod_info" |
+                jq '.items[] | select(.metadata.labels.app == $app_label) | .status.phase' \
+                    --arg "app_label" "$app_label_value" \
+                    --raw-output
+        )
+
+        if test "$pod_phase" != "Running"; then
+            echo "Pod not running yet. Trying again..."
+        else
+            break
+        fi
+
+        sleep 10
+    done
+}
+
+wait_till_syncup_and_fund() {
+    local stakeamount="400000000ibc/toyusdc"
+
+    while true; do
+        if status="$(get_node_info)"; then
+            if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
+                if test "$parsed" == "false"; then
+                    sleep 30
+                    agd tx bank send "$(get_whale_keyname)" "$PROVISIONING_ADDRESS" "$stakeamount" \
+                        --broadcast-mode "block" \
+                        --chain-id="$CHAIN_ID" \
+                        --home "$AGORIC_HOME" \
+                        --keyring-backend "test" \
+                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                        --yes
+                    touch "$AGORIC_HOME/registered"
+
+                    sleep 10
+                    return
+                else
+                    echo "not caught up, waiting to fund provision account"
+                fi
+            fi
+        fi
+        sleep 5
+    done
+
 }
 
 wait_till_syncup_and_register() {
     local stakeamount="50000000ubld"
 
     while true; do
-        if status=$(agd status --home "$AGORIC_HOME"); then
-            if parsed=$(echo "$status" | jq --raw-output '.SyncInfo.catching_up'); then
-                if [[ $parsed == "false" ]]; then
+        if status="$(get_node_info)"; then
+            if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
+                if test "$parsed" == "false"; then
                     echo "caught up, register validator"
                     ensure_balance "$(get_whale_keyname)" "$stakeamount"
                     sleep 10
@@ -142,9 +292,9 @@ wait_till_syncup_and_register() {
                         --keyring-backend "test" \
                         --min-self-delegation "1" \
                         --moniker "$PODNAME" \
-                        --node "$PRIMARY_ENDPOINT:26657" \
+                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
                         --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
-                        --website "http://$POD_IP:26657" \
+                        --website "http://$POD_IP:$RPC_PORT" \
                         --yes
                     touch "$AGORIC_HOME/registered"
 

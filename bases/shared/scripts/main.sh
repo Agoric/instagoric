@@ -36,43 +36,8 @@ ln --force --symbolic "$SERVER_LOG_FILE" /state/server.log
 ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
 
-wait_till_syncup_and_fund() {
-    while true; do
-        if status=$(agd status --home="$AGORIC_HOME"); then
-            if parsed=$(echo "$status" | jq -r .SyncInfo.catching_up); then
-                if [[ $parsed == "false" ]]; then
-                    sleep 30
-                    stakeamount="400000000ibc/toyusdc"
-
-                    agd tx bank send -b block "$(get_whale_keyname)" "agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346" "$stakeamount" \
-                        --node "${PRIMARY_ENDPOINT}:26657" -y --keyring-backend=test --home="$AGORIC_HOME" --chain-id="$CHAIN_ID"
-                    touch "$AGORIC_HOME/registered"
-
-                    sleep 10
-                    return
-                else
-                    echo "not caught up, waiting to fund provision account"
-                fi
-            fi
-        fi
-        sleep 5
-    done
-
-}
-
-start_helper() {
-    (
-        SRV=/usr/src/instagoric-server
-        rm -rf "$SRV"
-        mkdir -p "$SRV" || exit
-        cp /config/server/* "$SRV" || exit
-        cd "$SRV" || exit
-        yarn --production
-        while true; do
-            yarn start >>"$SERVER_LOG_FILE" 2>&1
-            sleep 1
-        done
-    )
+start_helper_wrapper() {
+    start_helper "$SERVER_LOG_FILE"
 }
 
 auto_approve() {
@@ -117,74 +82,6 @@ auto_approve() {
     fi
 }
 
-hang() {
-    hangfile="$1"
-    if [ -n "$hangfile" ] && [ -f "$hangfile" ]; then
-        echo 1>&2 "$hangfile exists, keeping entrypoint alive..."
-    fi
-    while [ -z "$hangfile" ] || [ -f "$hangfile" ]; do
-        sleep 600 &
-        pid=$!
-
-        echo 1>&2 "still hanging: to exit kill $pid"
-        wait $pid
-        slept=$?
-        [ $slept -eq 0 ] || break
-    done
-}
-
-get_ips() {
-    servicename=$1
-    while true; do
-        if json=$(curl --fail -m 15 -sS "localhost:8002/ips"); then
-            if [[ "$(echo "$json" | jq -r .status)" == "1" ]]; then
-                if ip=$(echo "$json" | jq -r ".ips.\"$servicename\""); then
-                    echo "$ip"
-                    break
-                fi
-            fi
-        fi
-
-        sleep 2
-    done
-}
-
-get_pod_ip() {
-    # Define your variable
-    app_label_value=$1
-
-    while true; do
-        pod_info=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
-        pod_ip=$(echo "$pod_info" | jq --arg app_value "$app_label_value" -r '.items[] | select(.metadata.labels.app == $app_value) .status.podIP')
-
-        if [[ -z "$pod_ip" ]]; then
-            echo "Couldn't get Pod IP address. Trying again..."
-        else
-            break
-        fi
-        sleep 10
-    done
-
-    echo "$pod_ip"
-}
-
-wait_for_pod() {
-    # Define your variable
-    app_label_value=$1
-
-    while true; do
-        pod_info=$(curl -sSk -H "Authorization: Bearer $TOKEN" --cacert $CA_PATH $API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods/)
-        pod_phase=$(echo "$pod_info" | jq --arg app_value "$app_label_value" -r '.items[] | select(.metadata.labels.app == $app_value) .status.phase')
-
-        if [[ "$pod_phase" != "Running" ]]; then
-            echo "Pod not running yet. Trying again..."
-        else
-            break
-        fi
-        sleep 10
-    done
-}
-
 fork_setup() {
     THIS_FORK=$1
     wait_for_pod "fork1"
@@ -206,7 +103,7 @@ fork_setup() {
         tar -xzf "/state/agoric-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
     fi
 
-    persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:26656,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:26656\""
+    persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:$P2P_PORT,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:$P2P_PORT\""
     sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
 }
 
@@ -252,8 +149,6 @@ start_otel_server &
 echo "ROLE: $ROLE"
 echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
-
-whaleibcdenoms="10000000000000000ubld,10000000000000000uist,1000000provisionpass,1000000000000000000ibc/toyatom,1000000000000000000ibc/toyusdc,1000000000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234,1000000000000000000ibc/usdt1234,1000000000000000000ibc/06362C6F7F4FB702B94C13CD2E7C03DEC357683FD978936340B43FBFBC5351EB"
 
 if [[ -n "${GC_INTERVAL}" ]]; then
     jq '. + {defaultReapInterval: $freq}' --arg freq $GC_INTERVAL /usr/src/agoric-sdk/packages/vats/decentral-core-config.json >$BOOTSTRAP_CONFIG
@@ -320,12 +215,12 @@ if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
         if [[ -n $WHALE_SEED ]]; then
             for ((i = 0; i <= WHALE_DERIVATIONS; i++)); do
                 add_whale_key $i &&
-                    agd add-genesis-account "${WHALE_KEYNAME}_${i}" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME"
+                    agd add-genesis-account "${WHALE_KEYNAME}_${i}" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
             done
         fi
         if [[ -n $FAUCET_ADDRESS ]]; then
             #faucet
-            agd add-genesis-account "$FAUCET_ADDRESS" $whaleibcdenoms --keyring-backend test --home "$AGORIC_HOME"
+            agd add-genesis-account "$FAUCET_ADDRESS" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
         fi
 
         agd gentx self 50000000ubld \
@@ -414,13 +309,13 @@ echo "Firstboot: $firstboot"
 
 case "$ROLE" in
 "validator-primary")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     if [[ $firstboot == "true" ]]; then
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
     fi
 
-    external_address=$(get_ips validator-primary-ext)
-    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
+    external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
+    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
     if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
         export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
     fi
@@ -437,19 +332,19 @@ case "$ROLE" in
     ;;
 
 "validator")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     # wait for network live
     if [[ $firstboot == "true" ]]; then
         add_whale_key "$(get_whale_index)"
         create_self_key
-        PEERS="$PRIMARY_NOD_PEER_ID@validator-primary.$NAMESPACE.svc.cluster.local:26656"
-        SEEDS="$SEED_NOD_PEER_ID@seed.$NAMESPACE.svc.cluster.local:26656"
+        PEERS="$PRIMARY_NOD_PEER_ID@validator-primary.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+        SEEDS="$SEED_NOD_PEER_ID@seed.$NAMESPACE.svc.cluster.local:$P2P_PORT"
 
         sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
         sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$PRIMARY_NOD_PEER_ID\"/" "$AGORIC_HOME/config/config.toml"
         sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
     fi
-    sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:26656\"/" "$AGORIC_HOME/config/config.toml"
+    sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
     if [[ ! -f "$AGORIC_HOME/registered" ]]; then
         (wait_till_syncup_and_register) &
     fi
@@ -467,29 +362,42 @@ case "$ROLE" in
     sleep infinity
     ;;
 "seed")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
+    primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
+    seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
+
+    PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:$P2P_PORT"
+    SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:$P2P_PORT"
+
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     if [[ $firstboot == "true" ]]; then
         create_self_key
-        # wait for network live
 
-        cp /config/network/seed_node_key.json "$AGORIC_HOME/config/node_key.json"
-        PEERS="$PRIMARY_NOD_PEER_ID@validator-primary.$NAMESPACE.svc.cluster.local:26656"
+        cp "/config/network/seed_node_key.json" "$AGORIC_HOME/config/node_key.json"
 
-        sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$PRIMARY_NOD_PEER_ID\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^seed_mode =.*/seed_mode = true/" "$AGORIC_HOME/config/config.toml"
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
+            --in-place.bak
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$PRIMARY_NOD_PEER_ID'|" \
+            --in-place.bak
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^seed_mode = .*|seed_mode = true|" \
+            --in-place.bak
     fi
-    external_address=$(get_ips seed-ext)
-    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:26656\"/" "$AGORIC_HOME/config/config.toml"
+
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
+        --in-place.bak
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "s|^external_address = .*|external_address = '$seed_external_address:$P2P_PORT'|" \
+        --in-place.bak
 
     # Must not run state-sync unless we have enough non-pruned state for it.
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
-
-    auto_approve &
-    start_chain "$APP_LOG_FILE" --pruning "everything"
+    start_chain "$APP_LOG_FILE" --pruning everything
     ;;
 "fork1")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
+    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
     fork_setup agoric1
 
     /bin/bash /entrypoint/cron.sh
@@ -499,14 +407,14 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "fork2")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper &)
+    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
     fork_setup agoric2
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     auto_approve &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "follower")
-    (WHALE_KEYNAME=dummy POD_NAME=follower start_helper &)
+    (WHALE_KEYNAME=dummy POD_NAME=follower start_helper_wrapper &)
     if [[ ! -f "/state/follower-initialized" ]]; then
         cd /state/
         if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
@@ -539,7 +447,7 @@ esac
 
 status=$?
 
-hang /state/hang
+hang
 
 echo "exiting entrypoint with status=$status"
 exit "$status"
