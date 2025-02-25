@@ -85,7 +85,7 @@ get_ips() {
     while true; do
         if json=$(curl --fail --max-time "15" --silent --show-error "http://localhost:$PRIVATE_APP_PORT/ips"); then
             if test "$(echo "$json" | jq --raw-output '.status')" == "1"; then
-                if ip="$(echo "$json" | jq --raw-output ".ips.$service_name")"; then
+                if ip="$(echo "$json" | jq --raw-output ".ips.\"$service_name\"")"; then
                     echo "$ip"
                     break
                 fi
