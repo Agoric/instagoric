@@ -185,10 +185,13 @@ start_chain() {
     local log_file="$1"
     shift
 
-    node "/usr/local/bin/ag-chain-cosmos" start \
-        --home "$AGORIC_HOME" \
-        --log_format "json" \
-        "$@" >>"$log_file" 2>&1
+    (
+        cd "$SDK_ROOT_PATH" || exit
+        node "/usr/local/bin/ag-chain-cosmos" start \
+            --home "$AGORIC_HOME" \
+            --log_format "json" \
+            "$@" >>"$log_file" 2>&1
+    )
 }
 
 start_helper() {
