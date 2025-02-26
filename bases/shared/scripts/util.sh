@@ -15,7 +15,7 @@ add_key() {
 
 add_whale_key() {
     test -n "$WHALE_SEED" || return 1
-    local keyNumber="${1:-0}"
+    local keyNumber="${1:-"0"}"
 
     echo "$WHALE_SEED" |
         add_key "${WHALE_KEYNAME}_${keyNumber}" \
@@ -36,27 +36,30 @@ ensure_balance() {
     local amount
     local from
     local have
-    local haveValue
+    local have_value
     local needed
+    local new_needed
     local sep
     local to
     local want
 
     from="$1"
     amount="$2"
-    to="$(cat /state/self.address)"
+    to="$(cat "/state/self.address")"
     want=${amount//,/ }
 
     while true; do
         have="$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:$RPC_PORT" --output "json" | jq --raw-output '.balances')"
+        needed=""
+        sep=""
         for valueDenom in $want; do
-            # shellcheck disable=SC2001
-            read -r wantValue denom <<<"$(echo "$valueDenom" | sed -e 's/\([^0-9].*\)/ \1/')"
-            haveValue="$(echo "$have" | jq --raw-output ".[] | select(.denom == \"$denom\") | .amount")"
-            echo "$denom: have $haveValue, want $wantValue"
-            if test -z "$haveValue"; then
-                needed="$needed$sep$wantValue$denom"
-                sep=,
+            read -r wantValue denom <<<"$(echo "$valueDenom" | sed --expression 's/\([^0-9].*\)/ \1/')"
+            have_value="$(echo "$have" | jq --raw-output ".[] | select(.denom == \"$denom\") | .amount")"
+            echo "$denom: have $have_value, want $wantValue"
+            new_needed="$wantValue$denom"
+            if test -z "$have_value" && ! echo "$needed" | grep --extended-regexp --silent ".*${needed:-$new_needed}.*"; then
+                needed="$needed$sep$new_needed"
+                sep=","
             fi
         done
 
@@ -65,13 +68,14 @@ ensure_balance() {
             break
         fi
 
-        if agd tx bank send "$from" "$to" "$needed" \
+        if response="$(agd tx bank send "$from" "$to" "$needed" \
             --broadcast-mode "block" \
             --chain-id "$CHAIN_ID" \
             --home "$AGORIC_HOME" \
             --keyring-backend "test" \
             --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-            --yes; then
+            --output "json" \
+            --yes)" && test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
             echo "successfully sent $amount to $to"
         else
             sleep $(((RANDOM % 50) + 10))
@@ -272,17 +276,18 @@ wait_till_syncup_and_fund() {
 }
 
 wait_till_syncup_and_register() {
-    local stakeamount="50000000ubld"
+    local stake_amount="50000000ubld"
+    local wallet_name="$1"
 
     while true; do
         if status="$(get_node_info)"; then
             if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
                 if test "$parsed" == "false"; then
                     echo "caught up, register validator"
-                    ensure_balance "$(get_whale_keyname)" "$stakeamount"
+                    ensure_balance "$wallet_name" "$stake_amount"
                     sleep 10
                     agd tx staking create-validator \
-                        --amount "$stakeamount" \
+                        --amount "$stake_amount" \
                         --chain-id "$CHAIN_ID" \
                         --commission-max-change-rate "0.01" \
                         --commission-max-rate "0.20" \

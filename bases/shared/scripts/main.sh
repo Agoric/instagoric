@@ -345,8 +345,9 @@ case "$ROLE" in
         sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
     fi
     sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
+
     if [[ ! -f "$AGORIC_HOME/registered" ]]; then
-        (wait_till_syncup_and_register) &
+        wait_till_syncup_and_register "$(get_whale_keyname)" &
     fi
 
     if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
