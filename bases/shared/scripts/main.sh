@@ -537,6 +537,11 @@ patch_validator_config() {
 
 echo "Firstboot: $firstboot"
 
+if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"
+then
+    patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
+fi
+
 case "$ROLE" in
 "validator-primary")
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
