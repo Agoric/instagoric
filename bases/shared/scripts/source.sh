@@ -4,6 +4,7 @@ export API_ENDPOINT="https://kubernetes.default.svc"
 export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
 # shellcheck disable=SC2155
 export BOOT_TIME="$(date '+%s')"
+export BOOTSTRAP_CONFIG_PATCH_FILE="/config/instagoric-release/bootstrap-config.patch"
 export CA_PATH=${CA_PATH:-"/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"}
 export CHAIN_ID=${CHAIN_ID:-instagoric-1}
 export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
