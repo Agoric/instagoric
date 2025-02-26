@@ -307,6 +307,11 @@ patch_validator_config() {
 
 echo "Firstboot: $firstboot"
 
+if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"
+then
+    patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
+fi
+
 case "$ROLE" in
 "validator-primary")
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
@@ -363,13 +368,14 @@ case "$ROLE" in
     sleep infinity
     ;;
 "seed")
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
+
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
     seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
 
     PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:$P2P_PORT"
     SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:$P2P_PORT"
 
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     if [[ $firstboot == "true" ]]; then
         create_self_key
 
@@ -377,21 +383,21 @@ case "$ROLE" in
 
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
-            --in-place.bak
+            --in-place
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$PRIMARY_NOD_PEER_ID'|" \
-            --in-place.bak
+            --in-place
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^seed_mode = .*|seed_mode = true|" \
-            --in-place.bak
+            --in-place
     fi
 
     sed "$AGORIC_HOME/config/config.toml" \
         --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
-        --in-place.bak
+        --in-place
     sed "$AGORIC_HOME/config/config.toml" \
         --expression "s|^external_address = .*|external_address = '$seed_external_address:$P2P_PORT'|" \
-        --in-place.bak
+        --in-place
 
     # Must not run state-sync unless we have enough non-pruned state for it.
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
