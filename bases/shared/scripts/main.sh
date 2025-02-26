@@ -590,13 +590,14 @@ case "$ROLE" in
     sleep infinity
     ;;
 "seed")
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
+
     primary_validator_external_address="$(get_ips "validator-primary-ext")"
     seed_external_address="$(get_ips "seed-ext")"
 
     PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:26656"
     SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:26656"
 
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
     if [[ $firstboot == "true" ]]; then
         create_self_key
 
@@ -604,21 +605,21 @@ case "$ROLE" in
 
         sed "$AGORIC_HOME/config/config.toml" \
          --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
-         --in-place.bak
+         --in-place
         sed "$AGORIC_HOME/config/config.toml" \
          --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$PRIMARY_NOD_PEER_ID'|" \
-         --in-place.bak
+         --in-place
         sed "$AGORIC_HOME/config/config.toml" \
          --expression "s|^seed_mode = .*|seed_mode = true|" \
-         --in-place.bak
+         --in-place
     fi
 
     sed "$AGORIC_HOME/config/config.toml" \
      --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
-     --in-place.bak
+     --in-place
     sed "$AGORIC_HOME/config/config.toml" \
      --expression "s|^external_address = .*|external_address = '$seed_external_address:26656'|" \
-     --in-place.bak
+     --in-place
 
     # Must not run state-sync unless we have enough non-pruned state for it.
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
