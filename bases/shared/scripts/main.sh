@@ -590,13 +590,14 @@ case "$ROLE" in
     sleep infinity
     ;;
 "seed")
+    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
+
     primary_validator_external_address="$(get_ips "validator-primary-ext")"
     seed_external_address="$(get_ips "seed-ext")"
 
     PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:26656"
     SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:26656"
 
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper &)
     if [[ $firstboot == "true" ]]; then
         create_self_key
 
