@@ -40,48 +40,6 @@ start_helper_wrapper() {
     start_helper "$SERVER_LOG_FILE"
 }
 
-auto_approve() {
-    if [ "$AUTO_APPROVE_PROPOSAL" = "true" ]; then
-        POLL_INTERVAL=10
-        FROM_ACCOUNT=self
-
-        while true; do
-            # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
-            PROPOSALS=$(agd query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2>/dev/null)
-
-            # Extract proposal IDs
-            PROPOSAL_IDS=$(echo $PROPOSALS | jq -r '.proposals[].id')
-
-            echo $PROPOSAL_IDS
-
-            if [ -n "$PROPOSAL_IDS" ]; then
-                for PROPOSAL_ID in $PROPOSAL_IDS; do
-                    # Skip processing if already voted YES on the proposal with self account
-
-                    VOTES=$(agd query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
-                    ACCOUNT_VOTE=$([ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $(agd keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
-
-                    if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
-                        echo "Already voted YES on proposal ID: $PROPOSAL_ID"
-                        continue
-                    fi
-
-                    # Vote YES on the proposal
-                    agd tx gov vote $PROPOSAL_ID yes \
-                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes >/dev/null
-
-                    echo "Voted YES on proposal ID: $PROPOSAL_ID"
-                done
-            else
-                echo "No new proposals to vote on."
-            fi
-
-            # Wait for the next poll
-            sleep $POLL_INTERVAL
-        done
-    fi
-}
-
 fork_setup() {
     THIS_FORK=$1
     wait_for_pod "fork1"
@@ -202,7 +160,7 @@ if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
     fi
     cp /state/node_key.json "$AGORIC_HOME/config/node_key.json"
 
-    if [[ $ROLE == "validator-primary" ]]; then
+    if [[ $ROLE == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" ]]; then
         if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then
             timestamp=$(date +%s)
             curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST \
@@ -290,30 +248,14 @@ if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
     sed -i.bak '/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26657"/}' "$AGORIC_HOME/config/config.toml"
 fi
 
-patch_validator_config() {
-    if [[ -n "${CONSENSUS_TIMEOUT_PROPOSE}" ]]; then
-        sed -i.bak "s/^timeout_propose =.*/timeout_propose = \"$CONSENSUS_TIMEOUT_PROPOSE\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_PREVOTE}" ]]; then
-        sed -i.bak "s/^timeout_prevote =.*/timeout_prevote = \"$CONSENSUS_TIMEOUT_PREVOTE\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_PRECOMMIT}" ]]; then
-        sed -i.bak "s/^timeout_precommit =.*/timeout_precommit = \"$CONSENSUS_TIMEOUT_PRECOMMIT\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_COMMIT}" ]]; then
-        sed -i.bak "s/^timeout_commit =.*/timeout_commit = \"$CONSENSUS_TIMEOUT_COMMIT\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-}
-
 echo "Firstboot: $firstboot"
 
-if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"
-then
+if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"; then
     patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
 fi
 
 case "$ROLE" in
-"validator-primary")
+"$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     if [[ $firstboot == "true" ]]; then
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
@@ -328,22 +270,22 @@ case "$ROLE" in
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     if [[ ! -f "$AGORIC_HOME/registered" ]]; then
-        (wait_till_syncup_and_fund) &
+        wait_till_syncup_and_fund "$(get_whale_keyname)" &
     fi
 
     /bin/bash /entrypoint/cron.sh
-    auto_approve &
+    auto_approve "$SELF_KEYNAME" &
     start_chain "$APP_LOG_FILE"
     ;;
 
-"validator")
+"$VALIDATOR_STATEFUL_SET_NAME")
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
     # wait for network live
     if [[ $firstboot == "true" ]]; then
         add_whale_key "$(get_whale_index)"
         create_self_key
-        PEERS="$PRIMARY_NOD_PEER_ID@validator-primary.$NAMESPACE.svc.cluster.local:$P2P_PORT"
-        SEEDS="$SEED_NOD_PEER_ID@seed.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+        PEERS="$PRIMARY_NOD_PEER_ID@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+        SEEDS="$SEED_NOD_PEER_ID@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
 
         sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
         sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$PRIMARY_NOD_PEER_ID\"/" "$AGORIC_HOME/config/config.toml"
@@ -361,13 +303,13 @@ case "$ROLE" in
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     patch_validator_config
 
-    auto_approve &
+    auto_approve "$SELF_KEYNAME" &
     start_chain "$APP_LOG_FILE"
     ;;
 "ag-solo")
     sleep infinity
     ;;
-"seed")
+"$SEED_STATEFUL_SET_NAME")
     (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
 
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
@@ -404,20 +346,20 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
 "fork1")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
     fork_setup agoric1
 
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
+    auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "fork2")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
     fork_setup agoric2
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
+    auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "follower")
@@ -443,7 +385,6 @@ case "$ROLE" in
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
     start_chain "$APP_LOG_FILE"
     ;;
 *)
