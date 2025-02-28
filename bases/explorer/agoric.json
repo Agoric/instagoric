@@ -1,0 +1,28 @@
+{
+  "addr_prefix": "agoric",
+  "api": ["http://localhost:8080/api"],
+  "assets": [
+    {
+      "base": "ubld",
+      "coingecko_id": "agoric",
+      "exponent": "6",
+      "logo": "/logos/agoric-bld.svg",
+      "symbol": "BLD"
+    },
+    {
+      "base": "uist",
+      "coingecko_id": "",
+      "exponent": "6",
+      "logo": "",
+      "symbol": "IST"
+    }
+  ],
+  "chain_name": "agoric",
+  "coin_type": "564",
+  "coingecko": "agoric",
+  "logo": "/logos/agoric.png",
+  "min_tx_fee": "8000",
+  "rpc": ["http://localhost:8080/rpc"],
+  "sdk_version": "0.45.4",
+  "theme_color": "#666CFF"
+}
