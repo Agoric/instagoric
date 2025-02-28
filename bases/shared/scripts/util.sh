@@ -248,23 +248,25 @@ wait_for_pod() {
 
 wait_till_syncup_and_fund() {
     local stakeamount="400000000ibc/toyusdc"
+    local wallet_name="$1"
 
     while true; do
         if status="$(get_node_info)"; then
             if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
                 if test "$parsed" == "false"; then
                     sleep 30
-                    agd tx bank send "$(get_whale_keyname)" "$PROVISIONING_ADDRESS" "$stakeamount" \
+                    if response="$(agd tx bank send "$wallet_name" "$PROVISIONING_ADDRESS" "$stakeamount" \
                         --broadcast-mode "block" \
-                        --chain-id="$CHAIN_ID" \
+                        --chain-id "$CHAIN_ID" \
                         --home "$AGORIC_HOME" \
                         --keyring-backend "test" \
                         --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-                        --yes
-                    touch "$AGORIC_HOME/registered"
-
-                    sleep 10
-                    return
+                        --output "json" \
+                        --yes)" && test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
+                        touch "$AGORIC_HOME/registered"
+                        sleep 10
+                        return
+                    fi
                 else
                     echo "not caught up, waiting to fund provision account"
                 fi
@@ -272,7 +274,6 @@ wait_till_syncup_and_fund() {
         fi
         sleep 5
     done
-
 }
 
 wait_till_syncup_and_register() {
