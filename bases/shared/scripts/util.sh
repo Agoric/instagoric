@@ -146,6 +146,45 @@ ensure_balance() {
     done
 }
 
+fork_setup() {
+    local first_fork_ip=""
+    local fork_name="$1"
+    local second_fork_ip=""
+
+    wait_for_pod "$FIRST_FORK_STATEFUL_SET_NAME"
+    wait_for_pod "$SECOND_FORK_STATEFUL_SET_NAME"
+
+    echo "Fetching IP addresses of the two nodes..."
+    first_fork_ip="$(get_pod_ip "$FIRST_FORK_STATEFUL_SET_NAME")"
+    second_fork_ip="$(get_pod_ip "$SECOND_FORK_STATEFUL_SET_NAME")"
+
+    if ! test -f "/state/config-$MAINFORK_TIMESTAMP.tar.gz"; then
+        mkdir --parents "$AGORIC_HOME"
+        # shellcheck disable=SC2115,SC2086
+        rm --force --recursive $AGORIC_HOME/*
+
+        curl --output "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+            "$MAINFORK_IMAGE_URL/${fork_name}_config_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+            "$MAINFORK_IMAGE_URL/agoric_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/keyring-test.tar.gz" --silent "$MAINFORK_IMAGE_URL/keyring-test.tar.gz"
+
+        tar --extract --file "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/keyring-test.tar.gz" --gzip --directory "$AGORIC_HOME"
+
+        curl --output "$AGORIC_HOME/data/priv_validator_state.json" --silent \
+            "$MAINFORK_IMAGE_URL/priv_validator_state.json"
+
+        rm --force "/state/data-$MAINFORK_TIMESTAMP.tar.gz" "/state/keyring-test.tar.gz"
+    fi
+
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "|^persistent_peers = .*|persistent_peers = '$FIRST_FORK_NODE_ID@$first_fork_ip:$P2P_PORT,$SECOND_FORK_NODE_ID@$second_fork_ip:$P2P_PORT'|" \
+        --in-place
+
+}
+
 get_ips() {
     local service_name=$1
 

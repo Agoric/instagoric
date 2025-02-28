@@ -40,31 +40,6 @@ start_helper_wrapper() {
     start_helper "$SERVER_LOG_FILE"
 }
 
-fork_setup() {
-    THIS_FORK=$1
-    wait_for_pod "fork1"
-    wait_for_pod "fork2"
-
-    echo "Fetching IP addresses of the two nodes..."
-    FORK1_IP=$(get_pod_ip "fork1")
-    FORK2_IP=$(get_pod_ip "fork2")
-
-    if [ ! -f "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
-        mkdir -p $AGORIC_HOME
-        rm -rf $AGORIC_HOME/*
-
-        apt install -y axel
-        axel --quiet -n 10 -o "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz"
-        axel --quiet -n 10 -o "/state/agoric-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/agoric-$MAINFORK_HEIGHT.tar.gz"
-
-        tar -xzf "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
-        tar -xzf "/state/agoric-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
-    fi
-
-    persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:$P2P_PORT,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:$P2P_PORT\""
-    sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
-}
-
 start_otel_server() {
     if [ -z "$ENABLE_TELEMETRY" ]; then
         echo "skipping telemetry since ENABLE_TELEMETRY is not set"
@@ -345,9 +320,9 @@ case "$ROLE" in
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
-"fork1")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
-    fork_setup agoric1
+"$FIRST_FORK_STATEFUL_SET_NAME")
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    fork_setup "agoric1"
 
     /bin/bash /entrypoint/cron.sh
 
@@ -355,9 +330,9 @@ case "$ROLE" in
     auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
-"fork2")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
-    fork_setup agoric2
+"$SECOND_FORK_STATEFUL_SET_NAME")
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    fork_setup "agoric2"
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
