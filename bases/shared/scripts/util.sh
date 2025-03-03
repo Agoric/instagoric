@@ -405,7 +405,6 @@ wait_till_syncup_and_fund() {
         fi
         sleep 5
     done
-
 }
 
 wait_till_syncup_and_register() {
