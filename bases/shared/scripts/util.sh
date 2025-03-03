@@ -23,6 +23,69 @@ add_whale_key() {
             --recover
 }
 
+auto_approve() {
+    local account_vote=""
+    local proposal_id=""
+    local proposal_ids=""
+    local proposals=""
+    local votes=""
+    local wallet_name="$1"
+
+    if test "$AUTO_APPROVE_PROPOSAL" == "true"; then
+        while true; do
+            proposals="$(
+                agd query gov proposals \
+                    --chain-id "$CHAIN_ID" \
+                    --home "$AGORIC_HOME" \
+                    --output "json" \
+                    --status "VotingPeriod" 2>/dev/null
+            )"
+
+            proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"
+
+            if test -n "$proposal_ids"; then
+                for proposal_id in $proposal_ids; do
+                    votes="$(
+                        agd query gov votes "$proposal_id" \
+                            --chain-id "$CHAIN_ID" \
+                            --output json 2>/dev/null
+                    )"
+                    account_vote="$(
+                        test -n "$votes" && echo "$votes" |
+                            jq \
+                                '.votes[] | select(.voter == $account) | .options[] | .option' \
+                                --arg account "$(
+                                    agd keys show "$wallet_name" \
+                                        --address \
+                                        --home "$AGORIC_HOME" \
+                                        --keyring-backend "test"
+                                )" \
+                                --raw-output
+                    )"
+
+                    if test "$account_vote" == "$VOTE_OPTION_YES"; then
+                        echo "Already voted YES on proposal ID: $proposal_id"
+                        continue
+                    fi
+
+                    agd tx gov vote "$proposal_id" yes \
+                        --chain-id "$CHAIN_ID" \
+                        --from "$wallet_name" \
+                        --home "$AGORIC_HOME" \
+                        --keyring-backend "test" \
+                        --yes >/dev/null
+
+                    echo "Voted YES on proposal ID: $proposal_id"
+                done
+            else
+                echo "No new proposals to vote on."
+            fi
+
+            sleep $AUTO_APPROVE_POLL_INTERVAL
+        done
+    fi
+}
+
 create_self_key() {
     add_key "self" >/state/self.out 2>&1
     tail --lines 1 /state/self.out >/state/self.key
@@ -81,6 +144,45 @@ ensure_balance() {
             sleep $(((RANDOM % 50) + 10))
         fi
     done
+}
+
+fork_setup() {
+    local first_fork_ip=""
+    local fork_name="$1"
+    local second_fork_ip=""
+
+    wait_for_pod "$FIRST_FORK_STATEFUL_SET_NAME"
+    wait_for_pod "$SECOND_FORK_STATEFUL_SET_NAME"
+
+    echo "Fetching IP addresses of the two nodes..."
+    first_fork_ip="$(get_pod_ip "$FIRST_FORK_STATEFUL_SET_NAME")"
+    second_fork_ip="$(get_pod_ip "$SECOND_FORK_STATEFUL_SET_NAME")"
+
+    if ! test -f "/state/config-$MAINFORK_TIMESTAMP.tar.gz"; then
+        mkdir --parents "$AGORIC_HOME"
+        # shellcheck disable=SC2115,SC2086
+        rm --force --recursive $AGORIC_HOME/*
+
+        curl --output "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+            "$MAINFORK_IMAGE_URL/${fork_name}_config_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --silent \
+            "$MAINFORK_IMAGE_URL/agoric_$MAINFORK_TIMESTAMP.tar.gz"
+        curl --output "/state/keyring-test.tar.gz" --silent "$MAINFORK_IMAGE_URL/keyring-test.tar.gz"
+
+        tar --extract --file "/state/config-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/data-$MAINFORK_TIMESTAMP.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/keyring-test.tar.gz" --gzip --directory "$AGORIC_HOME"
+
+        curl --output "$AGORIC_HOME/data/priv_validator_state.json" --silent \
+            "$MAINFORK_IMAGE_URL/priv_validator_state.json"
+
+        rm --force "/state/data-$MAINFORK_TIMESTAMP.tar.gz" "/state/keyring-test.tar.gz"
+    fi
+
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "|^persistent_peers = .*|persistent_peers = '$FIRST_FORK_NODE_ID@$first_fork_ip:$P2P_PORT,$SECOND_FORK_NODE_ID@$second_fork_ip:$P2P_PORT'|" \
+        --in-place
+
 }
 
 get_ips() {
@@ -185,6 +287,29 @@ hang() {
     done
 }
 
+patch_validator_config() {
+    if test -n "${CONSENSUS_TIMEOUT_PROPOSE}"; then
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^timeout_propose = .*|timeout_propose = '$CONSENSUS_TIMEOUT_PROPOSE'|" \
+            --in-place
+    fi
+    if test -n "${CONSENSUS_TIMEOUT_PREVOTE}"; then
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^timeout_prevote = .*|timeout_prevote = '$CONSENSUS_TIMEOUT_PREVOTE'|" \
+            --in-place
+    fi
+    if test -n "${CONSENSUS_TIMEOUT_PRECOMMIT}"; then
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^timeout_precommit = .*|timeout_precommit = '$CONSENSUS_TIMEOUT_PRECOMMIT'|" \
+            --in-place
+    fi
+    if test -n "${CONSENSUS_TIMEOUT_COMMIT}"; then
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^timeout_commit = .*|timeout_commit = '$CONSENSUS_TIMEOUT_COMMIT'|" \
+            --in-place
+    fi
+}
+
 start_chain() {
     local log_file="$1"
     shift
@@ -247,7 +372,10 @@ wait_for_pod() {
 }
 
 wait_till_syncup_and_fund() {
+    local parsed=""
+    local response=""
     local stakeamount="400000000ibc/toyusdc"
+    local status=""
     local wallet_name="$1"
 
     while true; do
@@ -255,14 +383,17 @@ wait_till_syncup_and_fund() {
             if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
                 if test "$parsed" == "false"; then
                     sleep 30
-                    if response="$(agd tx bank send "$wallet_name" "$PROVISIONING_ADDRESS" "$stakeamount" \
-                        --broadcast-mode "block" \
-                        --chain-id "$CHAIN_ID" \
-                        --home "$AGORIC_HOME" \
-                        --keyring-backend "test" \
-                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-                        --output "json" \
-                        --yes)" && test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
+                    response="$(
+                        agd tx bank send "$wallet_name" "$PROVISIONING_ADDRESS" "$stakeamount" \
+                            --broadcast-mode "block" \
+                            --chain-id "$CHAIN_ID" \
+                            --home "$AGORIC_HOME" \
+                            --keyring-backend "test" \
+                            --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                            --output "json" \
+                            --yes
+                    )"
+                    if test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
                         touch "$AGORIC_HOME/registered"
                         sleep 10
                         return

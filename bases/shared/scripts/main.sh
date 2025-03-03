@@ -40,73 +40,6 @@ start_helper_wrapper() {
     start_helper "$SERVER_LOG_FILE"
 }
 
-auto_approve() {
-    if [ "$AUTO_APPROVE_PROPOSAL" = "true" ]; then
-        POLL_INTERVAL=10
-        FROM_ACCOUNT=self
-
-        while true; do
-            # Query for proposals with status "PROPOSAL_STATUS_VOTING_PERIOD"
-            PROPOSALS=$(agd query gov proposals --status VotingPeriod --chain-id=$CHAIN_ID --home=$AGORIC_HOME --output json 2>/dev/null)
-
-            # Extract proposal IDs
-            PROPOSAL_IDS=$(echo $PROPOSALS | jq -r '.proposals[].id')
-
-            echo $PROPOSAL_IDS
-
-            if [ -n "$PROPOSAL_IDS" ]; then
-                for PROPOSAL_ID in $PROPOSAL_IDS; do
-                    # Skip processing if already voted YES on the proposal with self account
-
-                    VOTES=$(agd query gov votes $PROPOSAL_ID --chain-id=$CHAIN_ID --output json 2>/dev/null)
-                    ACCOUNT_VOTE=$([ -n "$VOTES" ] && echo $VOTES | jq -r --arg account $(agd keys show $FROM_ACCOUNT -a --home=$AGORIC_HOME --keyring-backend=test) '.votes[] | select(.voter == $account) | .options[] | .option')
-
-                    if [ "$ACCOUNT_VOTE" == "VOTE_OPTION_YES" ]; then
-                        echo "Already voted YES on proposal ID: $PROPOSAL_ID"
-                        continue
-                    fi
-
-                    # Vote YES on the proposal
-                    agd tx gov vote $PROPOSAL_ID yes \
-                        --from=$FROM_ACCOUNT --chain-id=$CHAIN_ID --keyring-backend=test --home=$AGORIC_HOME --yes >/dev/null
-
-                    echo "Voted YES on proposal ID: $PROPOSAL_ID"
-                done
-            else
-                echo "No new proposals to vote on."
-            fi
-
-            # Wait for the next poll
-            sleep $POLL_INTERVAL
-        done
-    fi
-}
-
-fork_setup() {
-    THIS_FORK=$1
-    wait_for_pod "fork1"
-    wait_for_pod "fork2"
-
-    echo "Fetching IP addresses of the two nodes..."
-    FORK1_IP=$(get_pod_ip "fork1")
-    FORK2_IP=$(get_pod_ip "fork2")
-
-    if [ ! -f "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" ]; then
-        mkdir -p $AGORIC_HOME
-        rm -rf $AGORIC_HOME/*
-
-        apt install -y axel
-        axel --quiet -n 10 -o "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz"
-        axel --quiet -n 10 -o "/state/agoric-$MAINFORK_HEIGHT.tar.gz" "$MAINFORK_IMAGE_URL/agoric-$MAINFORK_HEIGHT.tar.gz"
-
-        tar -xzf "/state/$THIS_FORK-config-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
-        tar -xzf "/state/agoric-$MAINFORK_HEIGHT.tar.gz" -C $AGORIC_HOME
-    fi
-
-    persistent_peers="persistent_peers = \"0663e8221928c923d516ea1e8972927f54da9edb@$FORK1_IP:$P2P_PORT,e234dc7fffdea593c5338a9dd8b5c22ba00731eb@$FORK2_IP:$P2P_PORT\""
-    sed -i "/^persistent_peers =/s/.*/$persistent_peers/" $AGORIC_HOME/config/config.toml
-}
-
 start_otel_server() {
     if [ -z "$ENABLE_TELEMETRY" ]; then
         echo "skipping telemetry since ENABLE_TELEMETRY is not set"
@@ -320,25 +253,9 @@ if ! test -f "$AGORIC_HOME/config/config.toml"; then
     sed -i.bak '/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26657"/}' "$AGORIC_HOME/config/config.toml"
 fi
 
-patch_validator_config() {
-    if [[ -n "${CONSENSUS_TIMEOUT_PROPOSE}" ]]; then
-        sed -i.bak "s/^timeout_propose =.*/timeout_propose = \"$CONSENSUS_TIMEOUT_PROPOSE\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_PREVOTE}" ]]; then
-        sed -i.bak "s/^timeout_prevote =.*/timeout_prevote = \"$CONSENSUS_TIMEOUT_PREVOTE\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_PRECOMMIT}" ]]; then
-        sed -i.bak "s/^timeout_precommit =.*/timeout_precommit = \"$CONSENSUS_TIMEOUT_PRECOMMIT\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-    if [[ -n "${CONSENSUS_TIMEOUT_COMMIT}" ]]; then
-        sed -i.bak "s/^timeout_commit =.*/timeout_commit = \"$CONSENSUS_TIMEOUT_COMMIT\"/" "$AGORIC_HOME/config/config.toml"
-    fi
-}
-
 echo "Firstboot: $firstboot"
 
-if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"
-then
+if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"; then
     patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
 fi
 
@@ -373,7 +290,7 @@ case "$ROLE" in
     fi
 
     /bin/bash /entrypoint/cron.sh
-    auto_approve &
+    auto_approve "$SELF_KEYNAME" &
     start_chain "$APP_LOG_FILE"
     ;;
 
@@ -412,7 +329,7 @@ case "$ROLE" in
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     patch_validator_config
 
-    auto_approve &
+    auto_approve "$SELF_KEYNAME" &
     start_chain "$APP_LOG_FILE"
     ;;
 "ag-solo")
@@ -459,21 +376,21 @@ case "$ROLE" in
     sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
-"fork1")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
-    fork_setup agoric1
+"$FIRST_FORK_STATEFUL_SET_NAME")
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    fork_setup "agoric1"
 
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
+    auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
-"fork2")
-    (WHALE_KEYNAME=whale POD_NAME=fork1 SEED_ENABLE=no NODE_ID='0663e8221928c923d516ea1e8972927f54da9edb' start_helper_wrapper &)
-    fork_setup agoric2
+"$SECOND_FORK_STATEFUL_SET_NAME")
+    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    fork_setup "agoric2"
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
+    auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "follower")
@@ -499,7 +416,6 @@ case "$ROLE" in
     /bin/bash /entrypoint/cron.sh
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    auto_approve &
     start_chain "$APP_LOG_FILE"
     ;;
 *)
