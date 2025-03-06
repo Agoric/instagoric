@@ -12,6 +12,7 @@ export CHAIN_ID=${CHAIN_ID:-instagoric-1}
 export ENDPOINT="http://validator.$NAMESPACE.svc.cluster.local"
 export FIRST_FORK_NODE_ID="0663e8221928c923d516ea1e8972927f54da9edb"
 export FIRST_FORK_STATEFUL_SET_NAME="fork1"
+export FOLLOWER_STATEFUL_SET_NAME="follower"
 export HANG_FILE_PATH="/state/hang"
 export MAINFORK_TIMESTAMP="1740226862"
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"

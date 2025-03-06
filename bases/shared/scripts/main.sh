@@ -218,7 +218,7 @@ if ! test -f "$AGORIC_HOME/config/config.toml"; then
             cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json
 
         else
-            if [[ $ROLE != fork* ]] && [[ $ROLE != "follower" ]]; then
+            if [[ $ROLE != "$FIRST_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$SECOND_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$FOLLOWER_STATEFUL_SET_NAME" ]]; then
                 get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
             fi
         fi
@@ -393,9 +393,9 @@ case "$ROLE" in
     auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
-"follower")
-    (WHALE_KEYNAME=dummy POD_NAME=follower start_helper_wrapper &)
-    if [[ ! -f "/state/follower-initialized" ]]; then
+"$FOLLOWER_STATEFUL_SET_NAME")
+    (WHALE_KEYNAME=dummy POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper &)
+    if [[ ! -f "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized" ]]; then
         cd /state/
         if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
             apt install -y axel
@@ -410,7 +410,7 @@ case "$ROLE" in
         cat $AGORIC_HOME/config/app.toml | tr '\n' '\r' | sed -e 's/\[rosetta\]\renable = true/\[rosetta\]\renable = false/' | tr '\r' '\n' | tee $AGORIC_HOME/config/app-new.toml
         mv -f $AGORIC_HOME/config/app-new.toml $AGORIC_HOME/config/app.toml
         sed -i 's/^snapshot-interval = .*/snapshot-interval = 0/' $AGORIC_HOME/config/app.toml
-        touch /state/follower-initialized
+        touch /state/$FOLLOWER_STATEFUL_SET_NAME-initialized
     fi
 
     /bin/bash /entrypoint/cron.sh
