@@ -48,6 +48,7 @@ auto_approve() {
                     votes="$(
                         agd query gov votes "$proposal_id" \
                             --chain-id "$CHAIN_ID" \
+                            --home "$AGORIC_HOME" \
                             --output json 2>/dev/null
                     )"
                     account_vote="$(
@@ -112,7 +113,13 @@ ensure_balance() {
     want=${amount//,/ }
 
     while true; do
-        have="$(agd query bank balances "$to" --node "$PRIMARY_ENDPOINT:$RPC_PORT" --output "json" | jq --raw-output '.balances')"
+        have="$(
+            agd query bank balances "$to" \
+                --home "$AGORIC_HOME" \
+                --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                --output "json" |
+                jq --raw-output '.balances'
+        )"
         needed=""
         sep=""
         for valueDenom in $want; do
