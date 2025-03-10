@@ -287,6 +287,10 @@ hang() {
     done
 }
 
+has_node_caught_up() {
+    test "$(get_node_info | jq --raw-output '.SyncInfo.catching_up')" == "false"
+}
+
 patch_validator_config() {
     if test -n "${CONSENSUS_TIMEOUT_PROPOSE}"; then
         sed "$AGORIC_HOME/config/config.toml" \
@@ -372,36 +376,30 @@ wait_for_pod() {
 }
 
 wait_till_syncup_and_fund() {
-    local parsed=""
     local response=""
     local stakeamount="400000000ibc/toyusdc"
-    local status=""
     local wallet_name="$1"
 
     while true; do
-        if status="$(get_node_info)"; then
-            if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
-                if test "$parsed" == "false"; then
-                    sleep 30
-                    response="$(
-                        agd tx bank send "$wallet_name" "$PROVISIONING_ADDRESS" "$stakeamount" \
-                            --broadcast-mode "block" \
-                            --chain-id "$CHAIN_ID" \
-                            --home "$AGORIC_HOME" \
-                            --keyring-backend "test" \
-                            --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-                            --output "json" \
-                            --yes
-                    )"
-                    if test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
-                        touch "$AGORIC_HOME/registered"
-                        sleep 10
-                        return
-                    fi
-                else
-                    echo "not caught up, waiting to fund provision account"
-                fi
+        if has_node_caught_up; then
+            sleep 30
+            response="$(
+                agd tx bank send "$wallet_name" "$PROVISIONING_ADDRESS" "$stakeamount" \
+                    --broadcast-mode "block" \
+                    --chain-id "$CHAIN_ID" \
+                    --home "$AGORIC_HOME" \
+                    --keyring-backend "test" \
+                    --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                    --output "json" \
+                    --yes
+            )"
+            if test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
+                touch "$AGORIC_HOME/registered"
+                sleep 10
+                return
             fi
+        else
+            echo "not caught up, waiting to fund provision account"
         fi
         sleep 5
     done
@@ -412,38 +410,34 @@ wait_till_syncup_and_register() {
     local wallet_name="$1"
 
     while true; do
-        if status="$(get_node_info)"; then
-            if parsed="$(echo "$status" | jq --raw-output '.SyncInfo.catching_up')"; then
-                if test "$parsed" == "false"; then
-                    echo "caught up, register validator"
-                    ensure_balance "$wallet_name" "$stake_amount"
-                    sleep 10
-                    agd tx staking create-validator \
-                        --amount "$stake_amount" \
-                        --chain-id "$CHAIN_ID" \
-                        --commission-max-change-rate "0.01" \
-                        --commission-max-rate "0.20" \
-                        --commission-rate "0.10" \
-                        --details "" \
-                        --from "self" \
-                        --gas "auto" \
-                        --gas-adjustment "1.4" \
-                        --home "$AGORIC_HOME" \
-                        --keyring-backend "test" \
-                        --min-self-delegation "1" \
-                        --moniker "$PODNAME" \
-                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-                        --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
-                        --website "http://$POD_IP:$RPC_PORT" \
-                        --yes
-                    touch "$AGORIC_HOME/registered"
+        if has_node_caught_up; then
+            echo "caught up, register validator"
+            ensure_balance "$wallet_name" "$stake_amount"
+            sleep 10
+            agd tx staking create-validator \
+                --amount "$stake_amount" \
+                --chain-id "$CHAIN_ID" \
+                --commission-max-change-rate "0.01" \
+                --commission-max-rate "0.20" \
+                --commission-rate "0.10" \
+                --details "" \
+                --from "self" \
+                --gas "auto" \
+                --gas-adjustment "1.4" \
+                --home "$AGORIC_HOME" \
+                --keyring-backend "test" \
+                --min-self-delegation "1" \
+                --moniker "$PODNAME" \
+                --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
+                --website "http://$POD_IP:$RPC_PORT" \
+                --yes
+            touch "$AGORIC_HOME/registered"
 
-                    sleep 10
-                    return
-                else
-                    echo "not caught up, waiting to register validator"
-                fi
-            fi
+            sleep 10
+            return
+        else
+            echo "not caught up, waiting to register validator"
         fi
         sleep 5
     done
