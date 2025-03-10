@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export A3P_SNAPSHOT_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/a3p"
 export API_ENDPOINT="https://kubernetes.default.svc"
 export AUTO_APPROVE_POLL_INTERVAL="10"
 export AUTO_APPROVE_PROPOSAL=${AUTO_APPROVE_PROPOSAL:-"false"}
@@ -38,6 +39,7 @@ export SEED_SERVICE_NAME="seed-ext"
 export SEED_STATEFUL_SET_NAME="seed"
 export TMPDIR="/state/tmp"
 export TOKEN_PATH="/var/run/secrets/kubernetes.io/serviceaccount/token"
+export VALIDATOR_KEY_NAME="validator"
 export VALIDATOR_STATEFUL_SET_NAME="validator"
 export VOTE_OPTION_YES="VOTE_OPTION_YES"
 export VOTING_PERIOD=${VOTING_PERIOD:-18h}
