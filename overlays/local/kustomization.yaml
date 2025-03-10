@@ -1,49 +1,40 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-# namespace: instagoric
-
-resources:
-  - ../../bases/shared
-  - ../../bases/rpcnodes
-  - ../../bases/primaryvalidator
-  - ../../bases/explorer
-#  - ../../bases/validators
-#  - ../../bases/seed
-#  - ../../bases/ag-solo-manual
-#  - ../../bases/ag-solo-tasks
 
 configMapGenerator:
-  - name: instagoric-release
-    literals:
-    - CHAIN_ID=agoriclocal-1
-    - BOOTSTRAP_CONFIG=@agoric/vats/decentral-core-config.json
-    - HONEYCOMB_DATASET=instagoric-local
-    - VOTING_PERIOD=2m
-    - NETNAME=${namespace}
+  - literals:
+      - BOOTSTRAP_CONFIG="@agoric/vm-config/decentral-core-config.json"
+      - CHAIN_ID="agoriclocal-1"
+      - NETNAME="${namespace}"
+      - VOTING_PERIOD="2m"
+    name: instagoric-release
+
+kind: Kustomization
+
+resources:
+  - ../../bases/explorer
+  - ../../bases/primaryvalidator
+  - ../../bases/rpcnodes
+  - ../../bases/shared
 
 secretGenerator:
-  - name: instagoric-secrets
-    literals:
-    # Yes, we already know this is a publically exposed secret.  For this local
-    # chain, it doesn't matter.
-    - "WHALE_SEED=chuckle good seminar twin parrot split minimum humble tumble predict liberty taste match blossom vicious pride slogan supreme attract lucky typical until switch dry"
-    # - FAUCET_ADDRESS=agoric1...
-    # - "HERMES_SEED=..."
+  - literals:
+      - WHALE_SEED="chuckle good seminar twin parrot split minimum humble tumble predict liberty taste match blossom vicious pride slogan supreme attract lucky typical until switch dry"
+    name: instagoric-secrets
 
 patches:
-  - target:
-      kind: StatefulSet
-      name: validator-primary
-    patch: |-
+  - patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/cpu
-        value: 2000m
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/cpu
         value: 2000m
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/memory
         value: 4Gi
       - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: 2000m
+      - op: replace
         path: /spec/template/spec/containers/0/resources/requests/memory
         value: 2Gi
+    target:
+      kind: StatefulSet
+      name: validator-primary
