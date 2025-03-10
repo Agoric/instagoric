@@ -1,0 +1,23 @@
+diff --git a/vite.config.ts b/vite.config.ts
+index bf29393..5acd46f 100755
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -66,4 +66,18 @@ export default defineConfig({
+   optimizeDeps: {
+     entries: ['./src/**/*.vue'],
+   },
++  server: {
++    proxy: {
++      '^/api/.*': {
++        target: 'http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT_API',
++        changeOrigin: true,
++        rewrite: (path) => path.replace(/^\/api*/g, "")
++      },
++      '^/rpc/.*': {
++        target: 'http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT_RPC',
++        changeOrigin: true,
++        rewrite: (path) => path.replace(/^\/rpc*/g, "")
++      },
++    },
++  },
+ });

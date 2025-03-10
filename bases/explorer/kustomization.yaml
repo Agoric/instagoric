@@ -6,6 +6,7 @@ configMapGenerator:
       - agoric.json
       - agoric.png
       - agoric-bld.svg
+      - config.patch
       - entrypoint.sh
 
 kind: Kustomization
