@@ -36,6 +36,11 @@ setup_repository() {
   git clone "$PING_PUB_REPOSITORY_LINK" "$PING_PUB_SOURCE"
   git -C "$PING_PUB_SOURCE" checkout "$COMMIT_HASH"
   patch --directory "$PING_PUB_SOURCE" --input "/entrypoint/config.patch" --strip "1"
+  sed "$PING_PUB_SOURCE/vite.config.ts" \
+    --expression "s|\$RPCNODES_SERVICE_HOST|$$RPCNODES_SERVICE_HOST|" \
+    --expression "s|\$RPCNODES_SERVICE_PORT_API|$$RPCNODES_SERVICE_PORT_API|" \
+    --expression "s|\$RPCNODES_SERVICE_PORT_RPC|$$RPCNODES_SERVICE_PORT_RPC|" \
+    --in-place
   cat "$PING_PUB_SOURCE/vite.config.ts"
 }
 
