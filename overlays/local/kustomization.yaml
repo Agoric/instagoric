@@ -23,6 +23,13 @@ secretGenerator:
 
 patches:
   - patch: |-
+      - op: remove
+        path: /metadata/annotations
+    target:
+      kind: Service
+      name: rpcnodes
+
+  - patch: |-
       - op: replace
         path: /spec/template/spec/containers/0/resources/limits/cpu
         value: 2000m
@@ -38,3 +45,24 @@ patches:
     target:
       kind: StatefulSet
       name: validator-primary
+
+  - patch: |-
+      $patch: delete
+      apiVersion: cloud.google.com/v1
+      kind: BackendConfig
+      metadata:
+        name: api-backendconfig
+
+  - patch: |-
+      $patch: delete
+      apiVersion: cloud.google.com/v1
+      kind: BackendConfig
+      metadata:
+        name: grpc-backendconfig
+
+  - patch: |-
+      $patch: delete
+      apiVersion: cloud.google.com/v1
+      kind: BackendConfig
+      metadata:
+        name: rpc-backendconfig
