@@ -37,7 +37,15 @@ ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
 
 start_helper_wrapper() {
-    start_helper "$SERVER_LOG_FILE"
+    (start_helper "$SERVER_LOG_FILE" &)
+}
+
+start_helper_for_validator() {
+    if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+        WHALE_KEYNAME="$VALIDATOR_KEY_NAME" start_helper_wrapper
+    else
+        WHALE_KEYNAME="$(get_whale_keyname)" start_helper_wrapper
+    fi
 }
 
 start_otel_server() {
@@ -123,14 +131,13 @@ fi
 if ! test -f "$AGORIC_HOME/config/config.toml"; then
     firstboot="true"
 
-    if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-    then
+    if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
         curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/config-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
-        --fail --location --output "/state/config.tar.gz" --silent
+            --fail --location --output "/state/config.tar.gz" --silent
         curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/data-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
-        --fail --location --output "/state/data.tar.gz" --silent
+            --fail --location --output "/state/data.tar.gz" --silent
         curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/keyring-test-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
-        --fail --location --output "/state/keyring-test.tar.gz" --silent
+            --fail --location --output "/state/keyring-test.tar.gz" --silent
 
         tar --extract --file "/state/config.tar.gz" --gzip --directory "$AGORIC_HOME"
         tar --extract --file "/state/data.tar.gz" --gzip --directory "$AGORIC_HOME"
@@ -138,18 +145,16 @@ if ! test -f "$AGORIC_HOME/config/config.toml"; then
 
         rm --force "/state/config.tar.gz" "/state/data.tar.gz" "/state/keyring-test.tar.gz"
 
-        if test "$ROLE" == "$VALIDATOR_STATEFUL_SET_NAME" || test "$ROLE" == "$SEED_STATEFUL_SET_NAME"
-        then
+        if test "$ROLE" == "$VALIDATOR_STATEFUL_SET_NAME" || test "$ROLE" == "$SEED_STATEFUL_SET_NAME"; then
             sed "$AGORIC_HOME/config/config.toml" --expression "s|^moniker = .*|moniker = '$PODNAME'|" --in-place
         else
-            if ! test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"
-            then
+            if ! test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"; then
                 echo "Not supported for $ROLE pod"
             else
                 curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/node-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
-                --fail --location --output "$AGORIC_HOME/config/node_key.json" --silent
+                    --fail --location --output "$AGORIC_HOME/config/node_key.json" --silent
                 curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/priv-validator-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
-                --fail --location --output "$AGORIC_HOME/config/priv_validator_key.json" --silent
+                    --fail --location --output "$AGORIC_HOME/config/priv_validator_key.json" --silent
             fi
         fi
     else
@@ -261,12 +266,7 @@ fi
 
 case "$ROLE" in
 "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
-    if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-    then
-        (WHALE_KEYNAME="$VALIDATOR_KEY_NAME" start_helper_wrapper &)
-    else
-        (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
-    fi
+    start_helper_for_validator
 
     if [[ $firstboot == "true" ]]; then
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
@@ -281,8 +281,7 @@ case "$ROLE" in
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     if [[ ! -f "$AGORIC_HOME/registered" ]]; then
-        if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-        then
+        if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
             wait_till_syncup_and_fund "$VALIDATOR_KEY_NAME" &
         else
             wait_till_syncup_and_fund "$(get_whale_keyname)" &
@@ -295,12 +294,7 @@ case "$ROLE" in
     ;;
 
 "$VALIDATOR_STATEFUL_SET_NAME")
-    if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-    then
-        (WHALE_KEYNAME="$VALIDATOR_KEY_NAME" start_helper_wrapper &)
-    else
-        (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
-    fi
+    start_helper_for_validator
 
     if [[ $firstboot == "true" ]]; then
         create_self_key
@@ -314,8 +308,7 @@ case "$ROLE" in
     sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
 
     if ! test -f "$AGORIC_HOME/registered"; then
-        if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-        then
+        if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
             wait_till_syncup_and_register "$VALIDATOR_KEY_NAME" &
         else
             add_whale_key "$(get_whale_index)"
@@ -336,12 +329,7 @@ case "$ROLE" in
     sleep infinity
     ;;
 "$SEED_STATEFUL_SET_NAME")
-    if test -n "$A3P_SNAPSHOT_TIMESTAMP"
-    then
-        (WHALE_KEYNAME="$VALIDATOR_KEY_NAME" start_helper_wrapper &)
-    else
-        (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
-    fi
+    start_helper_for_validator
 
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
     seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
@@ -377,7 +365,7 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
 "$FIRST_FORK_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper
     fork_setup "agoric1"
 
     /bin/bash /entrypoint/cron.sh
@@ -387,14 +375,14 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "$SECOND_FORK_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper
     fork_setup "agoric2"
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "$FOLLOWER_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME=dummy POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper &)
+    WHALE_KEYNAME=dummy POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper
     if [[ ! -f "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized" ]]; then
         cd /state/
         if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then
