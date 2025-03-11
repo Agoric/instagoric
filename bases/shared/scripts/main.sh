@@ -37,7 +37,15 @@ ln --force --symbolic "$SLOGFILE" /state/slogfile_current.json
 ln --force --symbolic "$CONTEXTUAL_SLOGFILE" /state/contextual_slogs.json
 
 start_helper_wrapper() {
-    start_helper "$SERVER_LOG_FILE"
+    (start_helper "$SERVER_LOG_FILE" &)
+}
+
+start_helper_for_validator() {
+    if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+        WHALE_KEYNAME="$VALIDATOR_KEY_NAME" start_helper_wrapper
+    else
+        WHALE_KEYNAME="$(get_whale_keyname)" start_helper_wrapper
+    fi
 }
 
 start_otel_server() {
@@ -119,81 +127,108 @@ if [[ -n "${ENDORSED_UI}" ]]; then
     sed -i "s/bafybeidvpbtlgefi3ptuqzr2fwfyfjqfj6onmye63ij7qkrb4yjxekdh3e/$ENDORSED_UI/" $MODIFIED_BOOTSTRAP_PATH
 fi
 
-#agd firstboot
-if [[ ! -f "$AGORIC_HOME/config/config.toml" ]]; then
-    # ari's terrible docker fix, please eventually remove
-    apt-get install -y nano tmux netcat
-
+# agd firstboot
+if ! test -f "$AGORIC_HOME/config/config.toml"; then
     firstboot="true"
-    echo "Initializing chain"
-    agd init --home "$AGORIC_HOME" --chain-id "$CHAIN_ID" "$PODNAME"
-    agoric set-defaults ag-chain-cosmos "$AGORIC_HOME"/config
 
-    # Preserve the node key for this state.
-    if [[ ! -f /state/node_key.json ]]; then
-        cp "$AGORIC_HOME/config/node_key.json" /state/node_key.json
-    fi
-    cp /state/node_key.json "$AGORIC_HOME/config/node_key.json"
+    if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+        curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/config-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+            --fail --location --output "/state/config.tar.gz" --silent
+        curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/data-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+            --fail --location --output "/state/data.tar.gz" --silent
+        curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/keyring-test-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+            --fail --location --output "/state/keyring-test.tar.gz" --silent
 
-    if [[ $ROLE == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" ]]; then
-        if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then
-            timestamp=$(date +%s)
-            curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST \
-                -H "X-Honeycomb-Team: $HONEYCOMB_API_KEY" \
-                -d "{\"message\":\"GC_INTERVAL: ${GC_INTERVAL}\", \"type\":\"deploy\", \"start_time\":${timestamp}}"
+        tar --extract --file "/state/config.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/data.tar.gz" --gzip --directory "$AGORIC_HOME"
+        tar --extract --file "/state/keyring-test.tar.gz" --gzip --directory "$AGORIC_HOME"
+
+        rm --force "/state/config.tar.gz" "/state/data.tar.gz" "/state/keyring-test.tar.gz"
+
+        if test "$ROLE" == "$VALIDATOR_STATEFUL_SET_NAME" || test "$ROLE" == "$SEED_STATEFUL_SET_NAME"; then
+            sed "$AGORIC_HOME/config/config.toml" --expression "s|^moniker = .*|moniker = '$PODNAME'|" --in-place
+        else
+            if ! test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"; then
+                echo "Not supported for $ROLE pod"
+            else
+                curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/node-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
+                    --fail --location --output "$AGORIC_HOME/config/node_key.json" --silent
+                curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/priv-validator-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
+                    --fail --location --output "$AGORIC_HOME/config/priv_validator_key.json" --silent
+            fi
         fi
-        create_self_key
-        agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME"
-
-        if [[ -n $WHALE_SEED ]]; then
-            for ((i = 0; i <= WHALE_DERIVATIONS; i++)); do
-                add_whale_key $i &&
-                    agd add-genesis-account "${WHALE_KEYNAME}_${i}" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
-            done
-        fi
-        if [[ -n $FAUCET_ADDRESS ]]; then
-            #faucet
-            agd add-genesis-account "$FAUCET_ADDRESS" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
-        fi
-
-        agd gentx self 50000000ubld \
-            --chain-id=$CHAIN_ID \
-            --moniker="agoric0" \
-            --ip="127.0.0.1" \
-            --website=https://agoric.com \
-            --details=agoric0 \
-            --commission-rate="0.10" \
-            --commission-max-rate="0.20" \
-            --commission-max-change-rate="0.01" \
-            --min-self-delegation="1" \
-            --keyring-backend=test \
-            --home "$AGORIC_HOME"
-
-        agd collect-gentxs --home "$AGORIC_HOME"
-
-        contents="$(jq ".app_state.swingset.params.bootstrap_vat_config = \"$BOOTSTRAP_CONFIG\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.crisis.constant_fee.denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.mint.params.mint_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.gov.deposit_params.min_deposit[0].denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.staking.params.bond_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.slashing.params.signed_blocks_window = \"10000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.mint.minter.inflation = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.mint.params.inflation_rate_change = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.mint.params.inflation_min = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.mint.params.inflation_max = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        contents="$(jq ".app_state.gov.voting_params.voting_period = \"$VOTING_PERIOD\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-
-        if [[ -n "${BLOCK_COMPUTE_LIMIT}" ]]; then
-            # TODO: Select blockComputeLimit by name instead of index
-            contents="$(jq ".app_state.swingset.params.beans_per_unit[0].beans = \"$BLOCK_COMPUTE_LIMIT\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
-        fi
-        cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json
-
     else
-        if [[ $ROLE != "$FIRST_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$SECOND_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$FOLLOWER_STATEFUL_SET_NAME" ]]; then
-            get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
+        echo "Initializing chain"
+        agd init --home "$AGORIC_HOME" --chain-id "$CHAIN_ID" "$PODNAME"
+        agoric set-defaults ag-chain-cosmos "$AGORIC_HOME"/config
+
+        # Preserve the node key for this state.
+        if [[ ! -f /state/node_key.json ]]; then
+            cp "$AGORIC_HOME/config/node_key.json" /state/node_key.json
+        fi
+        cp /state/node_key.json "$AGORIC_HOME/config/node_key.json"
+
+        if [[ $ROLE == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" ]]; then
+            if [[ -n "${GC_INTERVAL}" ]] && [[ -n "$HONEYCOMB_API_KEY" ]]; then
+                timestamp=$(date +%s)
+                curl "https://api.honeycomb.io/1/markers/$HONEYCOMB_DATASET" -X POST \
+                    -H "X-Honeycomb-Team: $HONEYCOMB_API_KEY" \
+                    -d "{\"message\":\"GC_INTERVAL: ${GC_INTERVAL}\", \"type\":\"deploy\", \"start_time\":${timestamp}}"
+            fi
+            create_self_key
+            agd add-genesis-account self 50000000ubld --keyring-backend test --home "$AGORIC_HOME"
+
+            if [[ -n $WHALE_SEED ]]; then
+                for ((i = 0; i <= WHALE_DERIVATIONS; i++)); do
+                    add_whale_key $i &&
+                        agd add-genesis-account "${WHALE_KEYNAME}_${i}" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
+                done
+            fi
+            if [[ -n $FAUCET_ADDRESS ]]; then
+                #faucet
+                agd add-genesis-account "$FAUCET_ADDRESS" $WHALE_IBC_DENOMS --keyring-backend test --home "$AGORIC_HOME"
+            fi
+
+            agd gentx self 50000000ubld \
+                --chain-id=$CHAIN_ID \
+                --moniker="agoric0" \
+                --ip="127.0.0.1" \
+                --website=https://agoric.com \
+                --details=agoric0 \
+                --commission-rate="0.10" \
+                --commission-max-rate="0.20" \
+                --commission-max-change-rate="0.01" \
+                --min-self-delegation="1" \
+                --keyring-backend=test \
+                --home "$AGORIC_HOME"
+
+            agd collect-gentxs --home "$AGORIC_HOME"
+
+            contents="$(jq ".app_state.swingset.params.bootstrap_vat_config = \"$BOOTSTRAP_CONFIG\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.crisis.constant_fee.denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.mint.params.mint_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.gov.deposit_params.min_deposit[0].denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.staking.params.bond_denom = \"ubld\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.slashing.params.signed_blocks_window = \"10000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.mint.minter.inflation = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.mint.params.inflation_rate_change = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.mint.params.inflation_min = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.mint.params.inflation_max = \"0.000000000000000000\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            contents="$(jq ".app_state.gov.voting_params.voting_period = \"$VOTING_PERIOD\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+
+            if [[ -n "${BLOCK_COMPUTE_LIMIT}" ]]; then
+                # TODO: Select blockComputeLimit by name instead of index
+                contents="$(jq ".app_state.swingset.params.beans_per_unit[0].beans = \"$BLOCK_COMPUTE_LIMIT\"" $AGORIC_HOME/config/genesis.json)" && echo -E "${contents}" >$AGORIC_HOME/config/genesis.json
+            fi
+            cp $AGORIC_HOME/config/genesis.json $AGORIC_HOME/config/genesis_final.json
+
+        else
+            if [[ $ROLE != "$FIRST_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$SECOND_FORK_STATEFUL_SET_NAME" ]] && [[ $ROLE != "$FOLLOWER_STATEFUL_SET_NAME" ]]; then
+                get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
+            fi
         fi
     fi
+
     sed -i.bak 's/^log_level/# log_level/' "$AGORIC_HOME/config/config.toml"
 
     if [[ -n "${PRUNING}" ]]; then
@@ -231,7 +266,8 @@ fi
 
 case "$ROLE" in
 "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
+    start_helper_for_validator
+
     if [[ $firstboot == "true" ]]; then
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
     fi
@@ -245,7 +281,11 @@ case "$ROLE" in
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     if [[ ! -f "$AGORIC_HOME/registered" ]]; then
-        wait_till_syncup_and_fund "$(get_whale_keyname)" &
+        if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+            wait_till_syncup_and_fund "$VALIDATOR_KEY_NAME" &
+        else
+            wait_till_syncup_and_fund "$(get_whale_keyname)" &
+        fi
     fi
 
     /bin/bash /entrypoint/cron.sh
@@ -254,10 +294,9 @@ case "$ROLE" in
     ;;
 
 "$VALIDATOR_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
-    # wait for network live
+    start_helper_for_validator
+
     if [[ $firstboot == "true" ]]; then
-        add_whale_key "$(get_whale_index)"
         create_self_key
         PEERS="$PRIMARY_NOD_PEER_ID@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
         SEEDS="$SEED_NOD_PEER_ID@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
@@ -268,8 +307,13 @@ case "$ROLE" in
     fi
     sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
 
-    if [[ ! -f "$AGORIC_HOME/registered" ]]; then
-        wait_till_syncup_and_register "$(get_whale_keyname)" &
+    if ! test -f "$AGORIC_HOME/registered"; then
+        if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+            wait_till_syncup_and_register "$VALIDATOR_KEY_NAME" &
+        else
+            add_whale_key "$(get_whale_index)"
+            wait_till_syncup_and_register "$(get_whale_keyname)" &
+        fi
     fi
 
     if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
@@ -285,7 +329,7 @@ case "$ROLE" in
     sleep infinity
     ;;
 "$SEED_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME=$(get_whale_keyname) start_helper_wrapper &)
+    start_helper_for_validator
 
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
     seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
@@ -321,7 +365,7 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
 "$FIRST_FORK_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper
     fork_setup "agoric1"
 
     /bin/bash /entrypoint/cron.sh
@@ -331,14 +375,14 @@ case "$ROLE" in
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "$SECOND_FORK_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper &)
+    WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper
     fork_setup "agoric2"
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     auto_approve "$WHALE_KEYNAME" &
     start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "false"
     ;;
 "$FOLLOWER_STATEFUL_SET_NAME")
-    (WHALE_KEYNAME=dummy POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper &)
+    WHALE_KEYNAME=dummy POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper
     if [[ ! -f "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized" ]]; then
         cd /state/
         if [[ ! -f "/state/$MAINNET_SNAPSHOT" ]]; then

@@ -258,6 +258,12 @@ spec:
                   optional: true
             - name: CLUSTER_NAME
               value: "$CLUSTER_NAME"
+            - name: "A3P_SNAPSHOT_TIMESTAMP"
+              valueFrom:
+                configMapKeyRef:
+                  name: "instagoric-release"
+                  key: "A3P_SNAPSHOT_TIMESTAMP"
+                  optional: true
           ports:
             - containerPort: 26656
               name: p2p
