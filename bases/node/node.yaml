@@ -303,6 +303,7 @@ spec:
                   wait $tester
             initialDelaySeconds: 10
             periodSeconds: 10
+            timeoutSeconds: 7
           volumeMounts:
             - name: state
               mountPath: /state
