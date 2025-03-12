@@ -1,24 +1,25 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 
 metadata:
-  name: relayer-test
+  name: relayer
 
 spec:
+  replicas: 1
   selector:
     matchLabels:
-      app: relayer-test
+      app: relayer
+  serviceName: relayer
 
   template:
     metadata:
       labels:
-        app: relayer-test
+        app: relayer
 
     spec:
       containers:
         - command:
             - /bin/bash
-            - -x
             - /root/scripts/entrypoint.sh
           env:
             - name: CHAIN_ID
@@ -50,16 +51,40 @@ spec:
                   key: IS_EXTERNAL_CHAIN_TESTNET
                   name: instagoric-release
                   optional: true
+            - name: RELAYER_MNEMONIC
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: HERMES_SEED
+                  optional: true
+            - name: RELAYER_HOME
+              value: /relayer
           image: debian:bullseye
-          name: relayer-test
+          name: relayer
           resources:
             limits:
               cpu: 2000m
+              ephemeral-storage: 8Gi
+              memory: 4Gi
+            requests:
+              cpu: 1000m
+              ephemeral-storage: 4Gi
               memory: 4Gi
           volumeMounts:
             - mountPath: /root/scripts
               name: helpers
+            - mountPath: /relayer
+              name: state
       volumes:
         - configMap:
             name: relayer-helpers
           name: helpers
+
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 4Gi

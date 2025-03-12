@@ -3,6 +3,7 @@
   "value": {
     "account-prefix": "$INTERNAL_CHAIN_ADDRESS_PREFIX",
     "chain-id": "$INTERNAL_CHAIN_ID",
+    "coin-type": 564,
     "debug": true,
     "gas-adjustment": 1.2,
     "gas-prices": "0.025$INTERNAL_CHAIN_GAS_DENOM",
