@@ -3,6 +3,7 @@
 set -o errexit -o nounset
 
 COMMIT_HASH="4d2d093560c52e08458f97f451dc1f0690e00094"
+NETDOMAIN="${NETDOMAIN:-".agoric.net"}"
 PING_PUB_REPOSITORY_LINK="https://github.com/ping-pub/explorer.git"
 PING_PUB_SOURCE="/workspace"
 SERVER_PORT="8080"
@@ -21,7 +22,7 @@ copy_logos() {
 set_chain_data() {
   rm --force $PING_PUB_SOURCE/chains/mainnet/*.json $PING_PUB_SOURCE/chains/testnet/*.json
 
-  jq '.api[] = "/api" | .rpc[] = "/rpc"' \
+  jq ".api[] = \"/api\" | .apiDirect = [\"https://$NETNAME.api$NETDOMAIN\"] | .rpc[] = \"/rpc\" | .rpcDirect = [\"https://$NETNAME.rpc$NETDOMAIN\"]" \
     --raw-output \
     <"/entrypoint/agoric.json" >"$PING_PUB_SOURCE/chains/mainnet/agoric.json"
 }

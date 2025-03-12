@@ -21,3 +21,58 @@ index bf29393..5acd46f 100755
 +    },
 +  },
  });
+diff --git a/src/stores/useDashboard.ts b/src/stores/useDashboard.ts
+index 8354c17b..48074718 100644
+--- a/src/stores/useDashboard.ts
++++ b/src/stores/useDashboard.ts
+@@ -65,7 +65,9 @@ export interface ChainConfig {
+   features?: string[]
+   endpoints: {
+     rest?: Endpoint[];
++    restDirect?: Endpoint[];
+     rpc?: Endpoint[];
++    rpcDirect?: Endpoint[];
+     grpc?: Endpoint[];
+   };
+   logo: string;
+@@ -99,6 +101,7 @@ export interface LocalConfig {
+   consensus_prefix?: string;
+   alias: string;
+   api: string[] | Endpoint[];
++  apiDirect?: string[] | Endpoint[];
+   grpc: Endpoint[];
+   provider_chain: {
+     api: string[] | Endpoint[]
+@@ -116,6 +119,7 @@ export interface LocalConfig {
+   theme_color?: string;
+   min_tx_fee: string;
+   rpc: string[] | Endpoint[];
++  rpcDirect?: string[] | Endpoint[];
+   sdk_version: string;
+   registry_name?: string;
+   features?: string[];
+@@ -176,7 +180,9 @@ export function fromLocal(lc: LocalConfig): ChainConfig {
+   conf.prettyName = lc.registry_name || lc.chain_name;
+   conf.endpoints = {
+     rest: apiConverter(lc.api),
++    restDirect: apiConverter(lc.apiDirect || lc.api),
+     rpc: apiConverter(lc.rpc),
++    rpcDirect: apiConverter(lc.rpcDirect || lc.rpc),
+     grpc: apiConverter(lc.grpc),
+   };
+   if(lc.provider_chain) {
+diff --git a/src/modules/wallet/keplr.vue b/src/modules/wallet/keplr.vue
+index c8ce25b8..9aeaa079 100644
+--- a/src/modules/wallet/keplr.vue
++++ b/src/modules/wallet/keplr.vue
+@@ -32,8 +32,8 @@ async function initParamsForKeplr() {
+     conf.value = JSON.stringify({
+         chainId: chainid,
+         chainName: chain.chainName,
+-        rpc: chain.endpoints?.rpc?.at(0)?.address,
+-        rest: chain.endpoints?.rest?.at(0)?.address,
++        rpc: chain.endpoints?.rpcDirect?.at(0)?.address || chain.endpoints?.rpc?.at(0)?.address,
++        rest: chain.endpoints?.restDirect?.at(0)?.address || chain.endpoints?.rest?.at(0)?.address,
+         bip44: {
+             coinType: Number(chain.coinType),
+         },
