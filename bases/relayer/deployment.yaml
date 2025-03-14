@@ -1,13 +1,15 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 
 metadata:
   name: relayer
 
 spec:
+  replicas: 1
   selector:
     matchLabels:
       app: relayer
+  serviceName: relayer
 
   template:
     metadata:
@@ -18,7 +20,6 @@ spec:
       containers:
         - command:
             - /bin/bash
-            - -x
             - /root/scripts/entrypoint.sh
           env:
             - name: CHAIN_ID
@@ -44,19 +45,46 @@ spec:
                   key: INTERNAL_CHAIN_GAS_DENOM
                   name: instagoric-release
                   optional: true
-          image: ghcr.io/agoric/agoric-sdk
+            - name: IS_EXTERNAL_CHAIN_TESTNET
+              valueFrom:
+                configMapKeyRef:
+                  key: IS_EXTERNAL_CHAIN_TESTNET
+                  name: instagoric-release
+                  optional: true
+            - name: RELAYER_MNEMONIC
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-secrets
+                  key: HERMES_SEED
+                  optional: true
+            - name: RELAYER_HOME
+              value: /relayer
+          image: debian:bullseye
           name: relayer
           resources:
             limits:
-              cpu: 1000m
-              memory: 1Gi
+              cpu: 2000m
+              ephemeral-storage: 8Gi
+              memory: 4Gi
             requests:
-              cpu: 200m
-              memory: 400Mi
+              cpu: 1000m
+              ephemeral-storage: 4Gi
+              memory: 4Gi
           volumeMounts:
             - mountPath: /root/scripts
               name: helpers
+            - mountPath: /relayer
+              name: state
       volumes:
         - configMap:
             name: relayer-helpers
           name: helpers
+
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 4Gi

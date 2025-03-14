@@ -1,123 +1,168 @@
 #!/bin/bash
 
-set -o errexit -o errtrace
+set -o errexit -o errtrace -o xtrace
 
-if [ -z "$EXTERNAL_CHAIN_NAME" ]
-then
+if test -z "$EXTERNAL_CHAIN_NAME"; then
     echo "EXTERNAL_CHAIN_NAME not provided"
     sleep infinity
 fi
 
-set -o nounset
-
+CONFIG_FILE_PATH="$RELAYER_HOME/config/config.yaml"
 DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-EXTERNAL_CHAIN_DATA_FILE=external_chain.json
-HOME_PATH="$HOME/.relayer"
-INTERNAL_CHAIN_NAME=agoric
+EXTERNAL_CHAIN_NAME=${EXTERNAL_CHAIN_NAME:-"osmosistestnet"}
+EXTERNAL_KEY_NAME=${EXTERNAL_KEY_NAME:-"My Wallet"}
+INTERNAL_CHAIN_ADDRESS_PREFIX=${INTERNAL_CHAIN_ADDRESS_PREFIX:-"agoric"}
+INTERNAL_CHAIN_CONFIG_FILE_NAME="internal-chain-config.json"
+INTERNAL_CHAIN_GAS_DENOM=${INTERNAL_CHAIN_GAS_DENOM:-"ubld"}
+INTERNAL_CHAIN_NAME="agoric"
 INTERNAL_CHAIN_RPC="http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT"
-POLL_INTERVAL=10
-PORT=transfer
-RELAYER_MNEMONIC=${RELAYER_MNEMONIC:-"talk prepare desk time attract morning grow arrange buddy appear spring bring genuine deer any mercy lizard wife local runway tennis erode auction square"}
-SDK_ROOT_PATH=/usr/src/agoric-sdk
+INTERNAL_KEY_NAME=${INTERNAL_KEY_NAME:-"My Wallet"}
+RELAYER_BINARY_EXPECTED_MD5_HASH="34496ca949e0e8fd7d9ab0514554b0a6"
+RELAYER_MNEMONIC=${RELAYER_MNEMONIC:-"orbit bench unit task food shock brand bracket domain regular warfare company announce wheel grape trust sphere boy doctor half guard ritual three ecology"}
+RELAYER_PATH="/bin/relayer"
 
-INTERNAL_CHAIN_ADDRESS_PREFIX=${INTERNAL_CHAIN_ADDRESS_PREFIX:-agoric}
-INTERNAL_CHAIN_GAS_DENOM=${INTERNAL_CHAIN_GAS_DENOM:-ubld}
+INTERNAL_CHAIN_CONFIG_FILE_PATH="$RELAYER_HOME/$INTERNAL_CHAIN_CONFIG_FILE_NAME"
+PATH_NAME="$INTERNAL_CHAIN_NAME-$EXTERNAL_CHAIN_NAME"
 
-cleanup() {
-    rm "$EXTERNAL_CHAIN_DATA_FILE"
-}
-
-ensure_balance_in_external_chain_address() {
-    EXTERNAL_CHAIN_ADDRESS=$(
-        echo "$ADDRESSES" | sed -n "s/.*${EXTERNAL_CHAIN_NAME}: \(${EXTERNAL_CHAIN_ADDRESS_PREFIX}[^\ ]*\).*/\1/p"
-    )
-
-    EXTERNAL_CHAIN_ADDRESS_BALANCE=$(
-        curl "${EXTERNAL_CHAIN_REST}/cosmos/bank/v1beta1/balances/$EXTERNAL_CHAIN_ADDRESS" | \
-        jq --arg denom "$EXTERNAL_CHAIN_GAS_DENOM" '.balances[] | select(.denom == $denom) | .amount | tonumber'
-    )
-
-    while true
-    do
-        if [ -z "$EXTERNAL_CHAIN_ADDRESS_BALANCE" ] || [ "$EXTERNAL_CHAIN_ADDRESS_BALANCE" -eq 0 ]
-        then
-            echo "Address $EXTERNAL_CHAIN_ADDRESS has no funds yet. Retrying again after $POLL_INTERVAL seconds"
-            sleep $POLL_INTERVAL
+add_chains() {
+    if ! relayer chains show "$EXTERNAL_CHAIN_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        TESTNET_FLAG=""
+        if test -z "$IS_EXTERNAL_CHAIN_TESTNET"; then
+            if [[ "$EXTERNAL_CHAIN_NAME" =~ ^.*testnet$ ]]; then
+                TESTNET_FLAG="--testnet"
+            fi
         else
-            echo "Address $EXTERNAL_CHAIN_ADDRESS has now $EXTERNAL_CHAIN_ADDRESS_BALANCE $EXTERNAL_CHAIN_GAS_DENOM"
-            break
+            if test "$IS_EXTERNAL_CHAIN_TESTNET" == "true"; then
+                TESTNET_FLAG="--testnet"
+            fi
         fi
-    done
+        relayer chains add "$EXTERNAL_CHAIN_NAME" --home "$RELAYER_HOME" "$TESTNET_FLAG"
+    fi
+
+    if ! relayer chains show "$INTERNAL_CHAIN_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        relayer chains add "$INTERNAL_CHAIN_NAME" --file "$INTERNAL_CHAIN_CONFIG_FILE_PATH" --home "$RELAYER_HOME"
+    fi
 }
 
-extract_external_chain_data() {
-    EXTERNAL_CHAIN_ADDRESS_PREFIX=$(jq --raw-output .bech32_prefix < "$EXTERNAL_CHAIN_DATA_FILE")
-    EXTERNAL_CHAIN_GAS_DENOM=$(jq --raw-output .fees.fee_tokens[0].denom < "$EXTERNAL_CHAIN_DATA_FILE")
-    EXTERNAL_CHAIN_ID=$(jq --raw-output .chain_id < "$EXTERNAL_CHAIN_DATA_FILE")
-    EXTERNAL_CHAIN_REST="$(jq --raw-output .apis.rest[0].address < "$EXTERNAL_CHAIN_DATA_FILE")"
-    EXTERNAL_CHAIN_RPC=$(jq --raw-output .apis.rpc[0].address < "$EXTERNAL_CHAIN_DATA_FILE")
+add_keys() {
+    if ! relayer keys show "$EXTERNAL_CHAIN_NAME" "$EXTERNAL_KEY_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        relayer keys restore "$EXTERNAL_CHAIN_NAME" "$EXTERNAL_KEY_NAME" "$RELAYER_MNEMONIC" \
+            --home "$RELAYER_HOME"
+    fi
 
-    EXTERNAL_CHAIN_REST="${EXTERNAL_CHAIN_REST%/}"
-    EXTERNAL_CHAIN_RPC="${EXTERNAL_CHAIN_RPC%/}"
+    if ! relayer keys show "$INTERNAL_CHAIN_NAME" "$INTERNAL_KEY_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        relayer keys restore "$INTERNAL_CHAIN_NAME" "$INTERNAL_KEY_NAME" "$RELAYER_MNEMONIC" \
+            --home "$RELAYER_HOME"
+    fi
+
+    if ! test "$(relayer config show --home "$RELAYER_HOME" --json | jq --raw-output ".chains.$EXTERNAL_CHAIN_NAME.value.key")" == "$EXTERNAL_KEY_NAME"; then
+        relayer keys use "$EXTERNAL_CHAIN_NAME" "$EXTERNAL_KEY_NAME" --home "$RELAYER_HOME"
+    fi
+
+    if ! test "$(relayer config show --home "$RELAYER_HOME" --json | jq --raw-output ".chains.$INTERNAL_CHAIN_NAME.value.key")" == "$INTERNAL_KEY_NAME"; then
+        relayer keys use "$INTERNAL_CHAIN_NAME" "$INTERNAL_KEY_NAME" --home "$RELAYER_HOME"
+    fi
 }
 
-get_external_chain_specs() {
-    curl "https://raw.githubusercontent.com/cosmos/chain-registry/refs/heads/master/testnets/$EXTERNAL_CHAIN_NAME/chain.json" \
-     --output "$EXTERNAL_CHAIN_DATA_FILE" 2>/dev/null
+add_path() {
+    if ! relayer paths show "$PATH_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        EXTERNAL_CHAIN_ID=$(
+            relayer chains show "$EXTERNAL_CHAIN_NAME" --home "$RELAYER_HOME" --json |
+                jq --raw-output '.value."chain-id"'
+        )
+        relayer paths new "$CHAIN_ID" "$EXTERNAL_CHAIN_ID" "$PATH_NAME" --home "$RELAYER_HOME"
+    fi
+
+    if ! test "$(relayer paths show "$PATH_NAME" --home "$RELAYER_HOME" --json | jq --raw-output '.status.connection')" == "true"; then
+        relayer transact link "$PATH_NAME" --home "$RELAYER_HOME" --override
+    fi
+}
+
+fetch_binary() {
+    curl "https://storage.googleapis.com/simulationlab_cloudbuild/rly" --output "$RELAYER_PATH"
+    chmod +x "$RELAYER_PATH"
+
+    RELAYER_BINARY_RECEIVED_MD5_HASH=$(md5sum "$RELAYER_PATH" --binary | awk '{ print $1 }')
+
+    if test "$RELAYER_BINARY_EXPECTED_MD5_HASH" != "$RELAYER_BINARY_RECEIVED_MD5_HASH"; then
+        echo "Expected hash: $RELAYER_BINARY_EXPECTED_MD5_HASH, Received hash: $RELAYER_BINARY_RECEIVED_MD5_HASH"
+        exit 1
+    fi
+}
+
+install_packages() {
+    apt-get update >/dev/null 2>&1
+    apt-get install curl jq --yes >/dev/null 2>&1
+}
+
+initiate_configuration() {
+    if ! test -f "$CONFIG_FILE_PATH"; then
+        relayer config init --home "$RELAYER_HOME"
+    fi
+}
+
+main() {
+    install_packages
+    fetch_binary
+    initiate_configuration
+    move_config_files
+    replace_placeholders_in_config_files
+    add_chains
+    add_keys
+    add_path
+    start_relayer
 }
 
 move_config_files() {
-    mkdir --parents "$HOME_PATH"
-    cp \
-     "$DIRECTORY_PATH/app.yaml" \
-     "$DIRECTORY_PATH/registry.yaml" \
-     "$HOME_PATH"
-}
-
-patch_relayer() {
-    cp "$DIRECTORY_PATH/confio-relayer.patch" "$SDK_ROOT_PATH/patches/@confio+relayer+0.11.3.patch"
-    yarn --cwd="$SDK_ROOT_PATH" patch-package
-}
-
-populate_addresses() {
-    ADDRESSES=$(agoric ibc-setup keys list --home="$HOME_PATH")
+    cp "$DIRECTORY_PATH/$INTERNAL_CHAIN_CONFIG_FILE_NAME" "$RELAYER_HOME"
 }
 
 replace_placeholders_in_config_files() {
-    sed "$HOME_PATH/app.yaml" \
-     --expression="s/\\\$EXTERNAL_CHAIN_NAME/${EXTERNAL_CHAIN_NAME}/g" \
-     --expression="s/\\\$INTERNAL_CHAIN_NAME/${INTERNAL_CHAIN_NAME}/g" \
-     --expression="s/\\\$MNEMONIC/${RELAYER_MNEMONIC}/g" \
-     --in-place \
-     --regexp-extended
-
-    sed "$HOME_PATH/registry.yaml" \
-     --expression="s/\\\$EXTERNAL_CHAIN_ADDRESS_PREFIX/${EXTERNAL_CHAIN_ADDRESS_PREFIX}/g" \
-     --expression="s/\\\$EXTERNAL_CHAIN_GAS_DENOM/${EXTERNAL_CHAIN_GAS_DENOM}/g" \
-     --expression="s/\\\$EXTERNAL_CHAIN_ID/${EXTERNAL_CHAIN_ID}/g" \
-     --expression="s/\\\$EXTERNAL_CHAIN_NAME/${EXTERNAL_CHAIN_NAME}/g" \
-     --expression="s|\\\$EXTERNAL_CHAIN_RPC|${EXTERNAL_CHAIN_RPC}|g" \
-     --expression="s/\\\$INTERNAL_CHAIN_ADDRESS_PREFIX/${INTERNAL_CHAIN_ADDRESS_PREFIX}/g" \
-     --expression="s/\\\$INTERNAL_CHAIN_GAS_DENOM/${INTERNAL_CHAIN_GAS_DENOM}/g" \
-     --expression="s/\\\$INTERNAL_CHAIN_ID/${CHAIN_ID}/g" \
-     --expression="s/\\\$INTERNAL_CHAIN_NAME/${INTERNAL_CHAIN_NAME}/g" \
-     --expression="s|\\\$INTERNAL_CHAIN_RPC|${INTERNAL_CHAIN_RPC}|g" \
-     --expression="s/\\\$PORT/${PORT}/g" \
-     --in-place \
-     --regexp-extended
+    sed "$INTERNAL_CHAIN_CONFIG_FILE_PATH" \
+        --expression "s|\$INTERNAL_CHAIN_ADDRESS_PREFIX|$INTERNAL_CHAIN_ADDRESS_PREFIX|" \
+        --expression "s|\$INTERNAL_CHAIN_GAS_DENOM|$INTERNAL_CHAIN_GAS_DENOM|" \
+        --expression "s|\$INTERNAL_CHAIN_ID|$CHAIN_ID|" \
+        --expression "s|\$INTERNAL_CHAIN_RPC|$INTERNAL_CHAIN_RPC|" \
+        --in-place
 }
 
 start_relayer() {
-    agoric ibc-setup ics20 --home="$HOME_PATH"
-    agoric ibc-relayer start --home="$HOME_PATH" --log-level=debug --poll="$POLL_INTERVAL"
+    EXTERNAL_CLIENT_ID=$(
+        relayer config show \
+            --home "$RELAYER_HOME" --json |
+            jq --raw-output '.paths."'"$PATH_NAME"'".dst."client-id"'
+    )
+    EXTERNAL_CONNECTION_ID=$(
+        relayer config show \
+            --home "$RELAYER_HOME" --json |
+            jq --raw-output '.paths."'"$PATH_NAME"'".dst."connection-id"'
+    )
+    INTERNAL_CLIENT_ID=$(
+        relayer config show \
+            --home "$RELAYER_HOME" --json |
+            jq --raw-output '.paths."'"$PATH_NAME"'".src."client-id"'
+    )
+    INTERNAL_CONNECTION_ID=$(
+        relayer config show \
+            --home "$RELAYER_HOME" --json |
+            jq --raw-output '.paths."'"$PATH_NAME"'".src."connection-id"'
+    )
+
+    EXTERNAL_CHANNEL_ID=$(
+        relayer query connection-channels "$EXTERNAL_CHAIN_NAME" "$EXTERNAL_CONNECTION_ID" \
+            --home "$RELAYER_HOME" --output json |
+            jq --raw-output '.channel_id'
+    )
+    INTERNAL_CHANNEL_ID=$(
+        relayer query connection-channels "$INTERNAL_CHAIN_NAME" "$INTERNAL_CONNECTION_ID" \
+            --home "$RELAYER_HOME" --output json |
+            jq --raw-output '.channel_id'
+    )
+
+    echo "External chain client ID: $EXTERNAL_CLIENT_ID, External chain channel ID: $EXTERNAL_CHANNEL_ID, External chain connection ID: $EXTERNAL_CONNECTION_ID"
+    echo "Internal chain client ID: $INTERNAL_CLIENT_ID, Internal chain channel ID: $INTERNAL_CHANNEL_ID, Internal chain connection ID: $INTERNAL_CONNECTION_ID"
+
+    relayer start --home "$RELAYER_HOME" --log-format "json" --log-level "debug"
 }
 
-patch_relayer
-get_external_chain_specs
-extract_external_chain_data
-move_config_files
-replace_placeholders_in_config_files
-populate_addresses
-ensure_balance_in_external_chain_address
-cleanup
-start_relayer
+main
