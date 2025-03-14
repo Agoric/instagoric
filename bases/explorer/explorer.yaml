@@ -17,6 +17,18 @@ spec:
       containers:
         - args: ["/entrypoint/entrypoint.sh"]
           command: ["/bin/bash"]
+          env:
+            - name: NETNAME
+              valueFrom:
+                configMapKeyRef:
+                  key: NETNAME
+                  name: instagoric-release
+            - name: NETDOMAIN
+              valueFrom:
+                configMapKeyRef:
+                  key: NETDOMAIN
+                  optional: true
+                  name: instagoric-release
           image: "node:20-bullseye"
           name: explorer
           ports:
