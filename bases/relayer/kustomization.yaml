@@ -4,7 +4,11 @@ configMapGenerator:
   - name: relayer-helpers
     files:
       - entrypoint.sh
-      - internal-chain-config.json
+      - current-chain.sh
+      - current-chain-post.sh
+      - devnet.sh
+      - ollinet.sh
+      - osmosistestnet-post.sh
 
 kind: Kustomization
 

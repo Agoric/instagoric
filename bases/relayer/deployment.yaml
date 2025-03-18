@@ -27,10 +27,10 @@ spec:
                 configMapKeyRef:
                   key: CHAIN_ID
                   name: instagoric-release
-            - name: EXTERNAL_CHAIN_NAME
+            - name: RELAYER_CONNECTIONS
               valueFrom:
                 configMapKeyRef:
-                  key: EXTERNAL_CHAIN_NAME
+                  key: RELAYER_CONNECTIONS
                   name: instagoric-release
                   optional: true
             - name: INTERNAL_CHAIN_ADDRESS_PREFIX
