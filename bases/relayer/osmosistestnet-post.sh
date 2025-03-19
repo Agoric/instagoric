@@ -3,7 +3,7 @@
 set -o errexit -o errtrace
 
 CHAIN_NAME="osmosistestnet"
-RPC="https://rpc.osmotest5.osmosis.zone:443"
+RPC="https://rpc.osmotest5.osmosis.zone:443" # Other endpoint has transaction indexing disabled
 
 ensure_correct_rpc() {
     if test "$(

@@ -33,24 +33,6 @@ spec:
                   key: RELAYER_CONNECTIONS
                   name: instagoric-release
                   optional: true
-            - name: INTERNAL_CHAIN_ADDRESS_PREFIX
-              valueFrom:
-                configMapKeyRef:
-                  key: INTERNAL_CHAIN_ADDRESS_PREFIX
-                  name: instagoric-release
-                  optional: true
-            - name: INTERNAL_CHAIN_GAS_DENOM
-              valueFrom:
-                configMapKeyRef:
-                  key: INTERNAL_CHAIN_GAS_DENOM
-                  name: instagoric-release
-                  optional: true
-            - name: IS_EXTERNAL_CHAIN_TESTNET
-              valueFrom:
-                configMapKeyRef:
-                  key: IS_EXTERNAL_CHAIN_TESTNET
-                  name: instagoric-release
-                  optional: true
             - name: RELAYER_MNEMONIC
               valueFrom:
                 secretKeyRef:

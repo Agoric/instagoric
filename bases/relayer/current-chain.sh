@@ -1,57 +1,10 @@
 #! /bin/bash
 
-set -o errexit -o errtrace
+set -o errexit -o errtrace -o nounset
 
-CONFIG_FILE_PATH="$RELAYER_HOME/current-chain.json"
-CHAIN_ADDRESS_PREFIX="agoric"
-CHAIN_GAS_DENOM="ubld"
-CHAIN_RPC="http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT"
-SKELETON_OBJECT=""
+DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+SCRIPT_NAME="$(basename "$0")"
 
-add_chain() {
-  relayer chains add "current-chain" --file "$CONFIG_FILE_PATH" --home "$RELAYER_HOME"
-}
-
-create_skeleton() {
-  SKELETON_OBJECT="$(
-    jq '
-    {
-      "type": "cosmos",
-      "value": {
-        "account-prefix": "",
-        "chain-id": "",
-        "coin-type": 564,
-        "debug": true,
-        "gas-adjustment": 1.2,
-        "gas-prices": "",
-        "key": "default",
-        "keyring-backend": "test",
-        "output-format": "json",
-        "rpc-addr": "",
-        "sign-mode": "direct",
-        "timeout": "20s"
-      }
-    }' --null-input
-  )"
-}
-
-main() {
-  create_skeleton
-  write_config_file
-  add_chain
-}
-
-write_config_file() {
-  echo "$SKELETON_OBJECT" |
-    jq --arg prefix "$CHAIN_ADDRESS_PREFIX" \
-      --arg chain_id "$CHAIN_ID" \
-      --arg gas_prices "0.025$CHAIN_GAS_DENOM" \
-      --arg rpc "$CHAIN_RPC" '
-      .value["account-prefix"] = $prefix |
-      .value["chain-id"] = $chain_id |
-      .value["gas-prices"] = $gas_prices |
-      .value["rpc-addr"] = $rpc
-    ' >"$CONFIG_FILE_PATH"
-}
-
-main
+CHAIN_NAME="${SCRIPT_NAME%.sh}" \
+  CHAIN_RPC="http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT" \
+  /bin/bash "$DIRECTORY_PATH/add-agoric-chain.sh"

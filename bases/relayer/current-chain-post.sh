@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -o errexit -o errtrace
+set -o errexit -o errtrace -o nounset
 
 RPC="http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT"
 
