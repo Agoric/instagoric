@@ -1,3 +1,0 @@
-dest: $EXTERNAL_CHAIN_NAME
-mnemonic: $MNEMONIC
-src: $INTERNAL_CHAIN_NAME
