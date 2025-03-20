@@ -150,9 +150,13 @@ async function getServices() {
   );
   const map1 = new Map();
   for (const item of services.items) {
-    const ingress = item.status?.loadBalancer?.ingress;
-    if (ingress?.length > 0) {
-      map1.set(item.metadata.name, ingress[0].ip);
+    // Cluster IP will only be used in case there is no Loadbalancer infrastructure
+    // which should only be in the case of a local cluster deployment
+    const ip =
+      item.status?.loadBalancer?.ingress?.[0].ip ||
+      (item.spec?.clusterIPs || []).find(Boolean);
+    if (ip) {
+      map1.set(item.metadata.name, ip);
     }
   }
   return map1;
