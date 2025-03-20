@@ -6,9 +6,11 @@ import express from 'express';
 import https from 'https';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
+import multer from 'multer';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
+const upload = multer({ dest: 'uploads/', preservePath: true });
 const { details: X } = globalThis.assert;
 
 const BASE_AMOUNT = "25000000";
@@ -295,6 +297,7 @@ Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${
 Logs: <a href=${logsUrl}>Click Here</a>
 Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
 VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
+Install Bundles: <a href="https://${netname}${domain}/install-bundle">https://${netname}${domain}/install-bundle</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -803,6 +806,118 @@ faucetapp.get('/transaction-status/:txhash', (req, res) => {
     );
   else res.status(400).send('invalid form');
 });
+
+publicapp.get('/install-bundle', async (req, res) => {
+  res.send(`
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+</head>
+<body>
+
+    <h1>Install Bundle and Submit Core Eval Proposal</h1>
+
+    <form id="uploadForm" enctype="multipart/form-data">
+        <input type="file" name="file" id="fileInput" multiple required>
+        <br><br>
+        <button type="submit">Upload and Submit Proposal</button>
+    </form>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent the default form submission
+
+            const formData = new FormData();
+            const fileInput = document.getElementById('fileInput');
+            
+            if (fileInput.files.length === 0) {
+                alert("Please select a file.");
+                return;
+            }
+
+            // Loop through all selected files and append them to FormData
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append('files[]', fileInput.files[i]);
+            }
+
+            fetch('/install-bundle', {
+                method: 'POST',
+                body: formData
+            })
+            .then(data => {
+                alert('File uploaded successfully!');
+                console.log(data);
+            })
+            .catch(error => {
+                alert('Failed to upload file.');
+                console.error('Error:', error);
+            });
+        });
+    </script>
+
+</body>
+</html>
+  `);
+});
+
+publicapp.post('/install-bundle', upload.array('files[]'), async (req, res) => {
+  // Check if there are files in the request
+  const files = req.files;
+  if (!Array.isArray(files) || files.length === 0) {
+    res.status(400).send('No files uploaded');
+    return;
+  }
+
+  // Iterate through all files and process each one
+  for (const file of files) {
+    const fileName = file.originalname;
+    const bundle = file.filename;
+
+    if (fileName.startsWith('b1-')) {
+      try {
+        const result = await $`\
+        ${agBinary} tx swingset install-bundle --compress "@uploads/${bundle}" \
+        --from ${FAUCET_KEYNAME} --keyring-backend=test --keyring-dir=${agoricHome} --gas=auto \
+        --chain-id=${chainId} --yes
+      `;
+
+        if (result.exitCode !== 0) {
+          res
+            .status(500)
+            .send(`Error processing file ${bundle}: ${result.stderr}`);
+          return;
+        }
+      } catch (error) {
+        res
+          .status(500)
+          .send(`Error processing file ${bundle}: ${error.message}`);
+        return;
+      }
+    }
+  }
+
+  const proposalPermitFile = files
+    .filter(file => file.originalname.endsWith('permit.json'))
+    .map(file => file.filename)[0];
+  const jsFile = files
+    .filter(file => file.originalname.endsWith('.js'))
+    .map(file => file.filename)[0];
+
+  const result =
+    await $`${agBinary} tx gov submit-proposal swingset-core-eval uploads/${proposalPermitFile} uploads/${jsFile} --title="Vaults Core Eval" --description="Vaults Core Eval" --deposit=1000000ubld --gas=auto --gas-adjustment=1.2 --from ${FAUCET_KEYNAME} --chain-id ${chainId} --home=${agoricHome} --keyring-backend=test --keyring-dir=${agoricHome} --yes`;
+
+  if (result.exitCode !== 0) {
+    res.status(500).send(`Error submiting proposal ${result.stderr}`);
+    return;
+  }
+
+  // If all files are processed successfully
+  res.status(200).send('All files uploaded and processed successfully');
+});
+
 
 faucetapp.listen(faucetport, () => {
   console.log(`faucetapp listening on port ${faucetport}`);
