@@ -72,6 +72,7 @@ start_otel_server() {
         sed "$OTEL_CONFIG" \
             --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
             --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
+            --expression "s/@CLUSTER_NAME@/${CLUSTER_NAME}/" \
             --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
             --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
             --expression "s/@NAMESPACE@/${NAMESPACE}/" \
