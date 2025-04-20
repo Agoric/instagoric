@@ -264,6 +264,12 @@ spec:
                   name: "instagoric-release"
                   key: "A3P_SNAPSHOT_TIMESTAMP"
                   optional: true
+            - name: "SERVICE_ADDRESS_FILE_PATH"
+              valueFrom:
+                configMapKeyRef:
+                  name: "instagoric-release"
+                  key: "SERVICE_ADDRESS_FILE_PATH"
+                  optional: true
           ports:
             - containerPort: 26656
               name: p2p

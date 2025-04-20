@@ -6,12 +6,13 @@ import express from 'express';
 import https from 'https';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
+import { readFile } from 'fs/promises';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
 const { details: X } = globalThis.assert;
 
-const BASE_AMOUNT = "25000000";
+const BASE_AMOUNT = '25000000';
 // Adding here to avoid ReferenceError for local server. Not needed for k8
 let CLUSTER_NAME;
 
@@ -22,15 +23,14 @@ const DELEGATE_AMOUNT =
   '75000000ubld,25000000ibc/toyatom,25000000ibc/toyellie,25000000ibc/toyusdc,25000000ibc/toyollie';
 
 const COMMANDS = {
-  "SEND_BLD/IBC": "send_bld_ibc",
-  "SEND_AND_PROVISION_IST": "send_ist_and_provision",
-  "FUND_PROV_POOL": "fund_provision_pool",
-  "CUSTOM_DENOMS_LIST": "custom_denoms_list",
+  'SEND_BLD/IBC': 'send_bld_ibc',
+  SEND_AND_PROVISION_IST: 'send_ist_and_provision',
+  FUND_PROV_POOL: 'fund_provision_pool',
+  CUSTOM_DENOMS_LIST: 'custom_denoms_list',
 };
 
-
 const PROVISIONING_POOL_ADDR = 'agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346';
-  
+
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAUCET_KEYNAME =
@@ -64,7 +64,7 @@ if (FAKE) {
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
   await $`${agBinary} --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  if(!process.env.AGORIC_HOME){
+  if (!process.env.AGORIC_HOME) {
     process.env.AGORIC_HOME = tmpDir;
   }
 }
@@ -91,10 +91,15 @@ if (FAKE) {
   revision =
     process.env.AG0_MODE === 'true'
       ? 'ag0'
-      : fs.readFileSync('/usr/src/agoric-sdk/packages/solo/public/git-revision.txt', {
-          encoding: 'utf8',
-          flag: 'r',
-        }).trim();
+      : fs
+          .readFileSync(
+            '/usr/src/agoric-sdk/packages/solo/public/git-revision.txt',
+            {
+              encoding: 'utf8',
+              flag: 'r',
+            },
+          )
+          .trim();
 }
 
 /**
@@ -141,10 +146,23 @@ async function getNodeId(node) {
 async function getServices() {
   if (FAKE) {
     return new Map([
-      ['validator-primary-ext', '1.1.1.1'],
-      ['seed-ext', '1.1.1.2'],
+      ['validator-primary-ext', '1.1.1.1:26656'],
+      ['seed-ext', '1.1.1.2:26656'],
     ]);
   }
+
+  if (process.env.SERVICE_ADDRESS_FILE_PATH) {
+    try {
+      const data = await readFile(process.env.SERVICE_ADDRESS_FILE_PATH);
+      return new Map(Object.entries(JSON.parse(data.toString())));
+    } catch (err) {
+      console.error(
+        `Error reading and converting data from file ${process.env.SERVICE_ADDRESS_FILE_PATH}: `,
+        err,
+      );
+    }
+  }
+
   const services = await makeKubernetesRequest(
     `/api/v1/namespaces/${namespace}/services/`,
   );
@@ -156,7 +174,7 @@ async function getServices() {
       item.status?.loadBalancer?.ingress?.[0].ip ||
       (item.spec?.clusterIPs || []).find(Boolean);
     if (ip) {
-      map1.set(item.metadata.name, ip);
+      map1.set(item.metadata.name, `${ip}:26656`);
     }
   }
   return map1;
@@ -171,22 +189,19 @@ const getNetworkConfig = async () => {
   const ap = JSON.parse(buf);
   ap.chainName = chainId;
   ap.gci = `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`;
-  ap.peers[0] = ap.peers[0].replace(
-    'validator-primary.instagoric.svc.cluster.local',
-    svc.get('validator-primary-ext') ||
-    `${podname}.${namespace}.svc.cluster.local`,
-  );
-  ap.peers[0] = ap.peers[0].replace(
-    'fb86a0993c694c981a28fa1ebd1fd692f345348b',
-    `${NODE_ID}`,
-  );
+  ap.peers[0] = `${NODE_ID}@${svc.get('validator-primary-ext') ||
+    `validator-primary.${namespace}.svc.cluster.local:26656`}`;
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
   ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
   if (INCLUDE_SEED === 'yes') {
-    ap.seeds[0] = ap.seeds[0].replace(
-      'seed.instagoric.svc.cluster.local',
-      svc.get('seed-ext') || `seed.${namespace}.svc.cluster.local`,
-    );
+    const matches = /(.+)@.+:\d+/.exec(ap.seeds[0]);
+    if (matches) {
+      const node_id = matches[1];
+      ap.seeds[0] = `${node_id}@${
+        svc.get('seed-ext') ||
+        `seed.${namespace}.svc.cluster.local:26656`
+      }`;
+    }
   } else {
     ap.seeds = [];
   }
@@ -264,10 +279,21 @@ faucetapp.use(logReq);
 publicapp.get('/', (req, res) => {
   const domain = NETDOMAIN;
   const netname = NETNAME;
-  const gcloudLoggingDatasource = 'P470A85C5170C7A1D'
-  const logsQuery = { "62l": { "datasource": gcloudLoggingDatasource, "queries": [{ "queryText": `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`}] } }
-  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(JSON.stringify(logsQuery))}&orgId=1`
-  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`
+  const gcloudLoggingDatasource = 'P470A85C5170C7A1D';
+  const logsQuery = {
+    '62l': {
+      datasource: gcloudLoggingDatasource,
+      queries: [
+        {
+          queryText: `resource.labels.container_name=\"log-slog\" resource.labels.namespace_name=\"${namespace}\" resource.labels.cluster_name=\"${CLUSTER_NAME}\"`,
+        },
+      ],
+    },
+  };
+  const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(
+    JSON.stringify(logsQuery),
+  )}&orgId=1`;
+  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8f/agoric-chain-metrics?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`;
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -277,13 +303,15 @@ publicapp.get('/', (req, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${chainId}${process.env.NETPURPOSE !== undefined
+Chain: ${chainId}${
+    process.env.NETPURPOSE !== undefined
       ? `\nPurpose: ${process.env.NETPURPOSE}`
       : ''
-    }
+  }
 Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]
-    }
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${
+    DOCKERTAG || dockerImage.split(':')[1]
+  }
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -294,7 +322,11 @@ Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.expl
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 Logs: <a href=${logsUrl}>Click Here</a>
 Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
-VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname}.rpc.agoric.net</a>
+VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${
+    netname === 'followmain' ? 'main-a' : netname
+  }.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${
+    netname === 'followmain' ? 'main-a' : netname
+  }.rpc.agoric.net</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -455,8 +487,8 @@ const pollForProvisioning = async (address, clientType, txHash) => {
   status === TRANSACTION_STATUS.NOT_FOUND
     ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
     : status === TRANSACTION_STATUS.SUCCESSFUL
-      ? await provisionAddress(address, clientType)
-      : console.log(
+    ? await provisionAddress(address, clientType)
+    : console.log(
         `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
       );
 };
@@ -516,15 +548,16 @@ const sendFunds = async (address, amount) => {
 
 // Faucet worker.
 
-const constructAmountToSend = (amount, denoms) => denoms.map(denom => `${amount}${denom}`).join(',');
+const constructAmountToSend = (amount, denoms) =>
+  denoms.map(denom => `${amount}${denom}`).join(',');
 
 const getDenoms = async () => {
   // Not handling pagination as it is used for testing. Limit 100 shoud suffice
 
   const result = await $`${agBinary} query bank total --limit=100 -o json`;
   const output = JSON.parse(result.stdout.trim());
-  return output.supply.map((element) => element.denom);
-}
+  return output.supply.map(element => element.denom);
+};
 
 const startFaucetWorker = async () => {
   console.log('Starting Faucet worker!');
@@ -544,7 +577,6 @@ const startFaucetWorker = async () => {
         case 'client':
         case COMMANDS['SEND_AND_PROVISION_IST']: {
           if (!AG0_MODE) {
-
             [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
             if (!exitCode) {
               pollForProvisioning(address, clientType, txHash);
@@ -553,23 +585,31 @@ const startFaucetWorker = async () => {
           break;
         }
         case 'delegate':
-        case COMMANDS["SEND_BLD/IBC"]: {
+        case COMMANDS['SEND_BLD/IBC']: {
           [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
           break;
         }
         case 'delegate':
-        case COMMANDS["FUND_PROV_POOL"]: {
-          [exitCode, txHash] = await sendFunds(PROVISIONING_POOL_ADDR, DELEGATE_AMOUNT);
+        case COMMANDS['FUND_PROV_POOL']: {
+          [exitCode, txHash] = await sendFunds(
+            PROVISIONING_POOL_ADDR,
+            DELEGATE_AMOUNT,
+          );
           break;
         }
-        case COMMANDS["CUSTOM_DENOMS_LIST"]: {
+        case COMMANDS['CUSTOM_DENOMS_LIST']: {
           let tokenAmount = BASE_AMOUNT;
           if (amount) {
             tokenAmount = String(Number(amount) * 1000_000);
           }
-          [exitCode, txHash] = await sendFunds(address, constructAmountToSend(tokenAmount, Array.isArray(denoms) ? denoms : [denoms]));
-            break;
-
+          [exitCode, txHash] = await sendFunds(
+            address,
+            constructAmountToSend(
+              tokenAmount,
+              Array.isArray(denoms) ? denoms : [denoms],
+            ),
+          );
+          break;
         }
         default: {
           console.log('unknown command');
@@ -602,19 +642,17 @@ privateapp.listen(privateport, () => {
   console.log(`privateapp listening on port ${privateport}`);
 });
 
-
 faucetapp.get('/', async (req, res) => {
-
   const denoms = await getDenoms();
   let denomHtml = '';
-  denoms.forEach((denom) => {
+  denoms.forEach(denom => {
     denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
-  })
-  const denomsDropDownHtml =`<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`
+  });
+  const denomsDropDownHtml = `<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`;
   const maxTokenAmount = 100;
 
   const clientText = !AG0_MODE
-    ? `<input type="radio" id="client" name="command" value=${COMMANDS["SEND_AND_PROVISION_IST"]} onclick="toggleRadio(event)">
+    ? `<input type="radio" id="client" name="command" value=${COMMANDS['SEND_AND_PROVISION_IST']} onclick="toggleRadio(event)">
 <label for="client">send IST and provision </label>
 <select name="clientType">
 <option value="SMART_WALLET">smart wallet</option>
@@ -664,12 +702,12 @@ faucetapp.get('/', async (req, res) => {
     </head><body><h1>welcome to the faucet</h1>
 <form action="/go" method="post">
 <label for="address">Address:</label> <input id="address" name="address" type="text" /><br>
-Request: <input type="radio" id="delegate" name="command" value=${COMMANDS["SEND_BLD/IBC"]} checked="checked" onclick="toggleRadio(event)">
+Request: <input type="radio" id="delegate" name="command" value=${COMMANDS['SEND_BLD/IBC']} checked="checked" onclick="toggleRadio(event)">
 <label for="delegate">send BLD/IBC toy tokens</label>
 ${clientText}
 
-<input type="radio" id=${COMMANDS["CUSTOM_DENOMS_LIST"]} name="command" value=${COMMANDS["CUSTOM_DENOMS_LIST"]} onclick="toggleRadio(event)"}>
-<label for=${COMMANDS["CUSTOM_DENOMS_LIST"]}> Select Custom Denoms </label>
+<input type="radio" id=${COMMANDS['CUSTOM_DENOMS_LIST']} name="command" value=${COMMANDS['CUSTOM_DENOMS_LIST']} onclick="toggleRadio(event)"}>
+<label for=${COMMANDS['CUSTOM_DENOMS_LIST']}> Select Custom Denoms </label>
 
 <br>
 
@@ -694,7 +732,7 @@ Denoms: ${denomsDropDownHtml} <br> <br>
 
 <br>
 <form action="/go" method="post">
-<input type="hidden" name="command" value=${COMMANDS["FUND_PROV_POOL"]} /><input type="submit" value="fund provision pool" />
+<input type="hidden" name="command" value=${COMMANDS['FUND_PROV_POOL']} /><input type="submit" value="fund provision pool" />
 </form>
 </body></html>
 `,

@@ -273,7 +273,7 @@ case "$ROLE" in
     fi
 
     external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
-    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
+    sed -i.bak "s/^external_address =.*/external_address = \"$external_address\"/" "$AGORIC_HOME/config/config.toml"
     if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
         export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
     fi
@@ -334,8 +334,8 @@ case "$ROLE" in
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
     seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
 
-    PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:$P2P_PORT"
-    SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:$P2P_PORT"
+    PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address"
+    SEEDS="$SEED_NOD_PEER_ID@$seed_external_address"
 
     if [[ $firstboot == "true" ]]; then
         create_self_key
@@ -357,7 +357,7 @@ case "$ROLE" in
         --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
         --in-place
     sed "$AGORIC_HOME/config/config.toml" \
-        --expression "s|^external_address = .*|external_address = '$seed_external_address:$P2P_PORT'|" \
+        --expression "s|^external_address = .*|external_address = '$seed_external_address'|" \
         --in-place
 
     # Must not run state-sync unless we have enough non-pruned state for it.
