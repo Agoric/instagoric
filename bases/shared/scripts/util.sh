@@ -187,7 +187,7 @@ fork_setup() {
     fi
 
     sed "$AGORIC_HOME/config/config.toml" \
-        --expression "|^persistent_peers = .*|persistent_peers = '$FIRST_FORK_NODE_ID@$first_fork_ip:$P2P_PORT,$SECOND_FORK_NODE_ID@$second_fork_ip:$P2P_PORT'|" \
+        --expression "s|^persistent_peers = .*|persistent_peers = '$FIRST_FORK_NODE_ID@$first_fork_ip:$P2P_PORT,$SECOND_FORK_NODE_ID@$second_fork_ip:$P2P_PORT'|" \
         --in-place
 
 }
