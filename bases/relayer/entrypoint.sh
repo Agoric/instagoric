@@ -20,6 +20,10 @@ RELAYER_PATH="/bin/relayer"
 add_chains() {
     for chain in "${ALL_CHAINS[@]}"; do
         if ! relayer chains show "$chain" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+            if test -f "$DIRECTORY_PATH/$chain-pre.sh"; then
+                /bin/bash "$DIRECTORY_PATH/$chain-pre.sh"
+            fi
+
             if test -f "$DIRECTORY_PATH/$chain.sh"; then
                 /bin/bash "$DIRECTORY_PATH/$chain.sh"
             else
@@ -86,7 +90,8 @@ add_paths() {
 }
 
 fetch_binary() {
-    curl "https://storage.googleapis.com/simulationlab_cloudbuild/rly" --output "$RELAYER_PATH"
+    curl "https://storage.googleapis.com/simulationlab_cloudbuild/rly" \
+        --output "$RELAYER_PATH" --silent
     chmod +x "$RELAYER_PATH"
 
     RELAYER_BINARY_RECEIVED_MD5_HASH="$(md5sum "$RELAYER_PATH" --binary | awk '{ print $1 }')"

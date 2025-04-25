@@ -4,8 +4,9 @@ configMapGenerator:
   - name: relayer-helpers
     files:
       - add-agoric-chain.sh
+      - cosmoshubtestnet.sh
       - current-chain.sh
-      - current-chain-post.sh
+      - current-chain-pre.sh
       - devnet.sh
       - entrypoint.sh
       - ollinet.sh

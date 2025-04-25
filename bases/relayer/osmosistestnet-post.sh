@@ -9,7 +9,7 @@ ensure_correct_rpc() {
     if test "$(
         relayer chains show "$CHAIN_NAME" --home "$RELAYER_HOME" --json |
             jq --raw-output '.value."rpc-addr"'
-    )" == "$RPC"; then
+    )" != "$RPC"; then
         relayer chains set-rpc-addr "$CHAIN_NAME" "$RPC" --home "$RELAYER_HOME"
     fi
 }
