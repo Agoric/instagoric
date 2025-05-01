@@ -9,6 +9,8 @@ configMapGenerator:
       - current-chain-pre.sh
       - devnet.sh
       - entrypoint.sh
+      - nobletestnet.sh
+      - nobletestnet-pre.sh
       - ollinet.sh
       - osmosistestnet-post.sh
 

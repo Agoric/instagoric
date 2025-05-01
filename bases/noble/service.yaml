@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: noble-service
+spec:
+  ports:
+    - name: api
+      port: 1317
+      protocol: TCP
+      targetPort: 1317
+    - name: grpc
+      port: 9090
+      protocol: TCP
+      targetPort: 9090
+    - name: p2p
+      port: 26656
+      protocol: TCP
+      targetPort: 26656
+    - name: rpc
+      port: 26657
+      protocol: TCP
+      targetPort: 26657
+  selector:
+    app: noble
+  type: ClusterIP

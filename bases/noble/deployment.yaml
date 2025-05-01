@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: noble
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: noble
+  serviceName: noble-service
+  template:
+    metadata:
+      labels:
+        app: noble
+    spec:
+      containers:
+        - env:
+            - name: CHAIN_ID
+              value: grand-1
+            - name: MONIKER
+              value: follower
+          image: debian:bullseye
+          name: node
+          ports:
+            - containerPort: 1317
+              name: api
+            - containerPort: 9090
+              name: grpc
+            - containerPort: 26656
+              name: p2p
+            - containerPort: 26657
+              name: rpc
+          command:
+            - /bin/bash
+            - -x
+            - /config/entrypoint.sh
+          volumeMounts:
+            - name: noble-config
+              mountPath: /config
+            - name: state
+              mountPath: /state
+          resources:
+            limits:
+              cpu: 1000m
+              ephemeral-storage: 5Gi
+              memory: 8Gi
+            requests:
+              cpu: 1000m
+              ephemeral-storage: 5Gi
+              memory: 8Gi
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: noble-config
+          configMap:
+            name: noble-config
+  volumeClaimTemplates:
+    - metadata:
+        name: state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Gi
