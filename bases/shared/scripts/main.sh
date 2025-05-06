@@ -70,11 +70,11 @@ start_otel_server() {
         cp "$USE_OTEL_CONFIG" "$OTEL_CONFIG"
 
         sed "$OTEL_CONFIG" \
-            --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
-            --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-            --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
-            --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-            --expression "s/@NAMESPACE@/${NAMESPACE}/" \
+            --expression "s/@CHAIN_ID@/$CHAIN_ID/" \
+            --expression "s/@CLUSTER_NAME@/$CLUSTER_NAME/" \
+            --expression "s/@CONTAINER_ID@/$CONTAINER_ID/" \
+            --expression "s/@NAMESPACE@/$NAMESPACE/" \
+            --expression "s/@PODNAME@/$PODNAME/" \
             --in-place
 
         curl "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${ARCHITECTURE}.tar.gz" \
