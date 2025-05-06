@@ -2,7 +2,7 @@
 
 set -o nounset
 
-MINIUM_REQUIRED_HEIGHT="${MINIUM_REQUIRED_HEIGHT:-"10"}"
+MINIMUM_REQUIRED_HEIGHT="${MINIMUM_REQUIRED_HEIGHT:-"10"}"
 
 wait_for_progress() {
     local catching_up
@@ -21,14 +21,14 @@ wait_for_progress() {
             echo "$node_status" | jq --raw-output '.result.sync_info.latest_block_height'
         )"
 
-        if test "$catching_up" == "false" && test "$current_height" -gt "$MINIUM_REQUIRED_HEIGHT"; then
+        if test "$catching_up" == "false" && test "$current_height" -gt "$MINIMUM_REQUIRED_HEIGHT"; then
             break
         else
             sleep 2
         fi
     done
 
-    echo "Node has caught up and height '$current_height' is above '$MINIUM_REQUIRED_HEIGHT'"
+    echo "Node has caught up and height '$current_height' is above '$MINIMUM_REQUIRED_HEIGHT'"
 }
 
 wait_for_rpc() {
