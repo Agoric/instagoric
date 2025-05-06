@@ -56,11 +56,12 @@ start_otel_server() {
     elif [ -f "$USE_OTEL_CONFIG" ]; then
         cd "$HOME" || return
 
-        container_id=$(
-            grep systemd </proc/self/cgroup |
-                head --lines 1 |
-                cut --delimiter / --fields 4
-        )
+        container_id="$(
+            curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods?labelSelector=statefulset.kubernetes.io/pod-name%3D$PODNAME" \
+                --cacert "$CA_PATH" --header "Authorization: Bearer $(cat "$TOKEN_PATH")" --silent |
+                jq --raw-output '.items[] | .status.containerStatuses[] | select(.name == "node") | .containerID' |
+                sed --expression 's|containerd://||g'
+        )"
         ARCHITECTURE="$(dpkg --print-architecture)"
 
         echo "starting telemetry collector"
