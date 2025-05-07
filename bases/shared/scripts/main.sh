@@ -56,11 +56,12 @@ start_otel_server() {
     elif [ -f "$USE_OTEL_CONFIG" ]; then
         cd "$HOME" || return
 
-        container_id=$(
-            grep systemd </proc/self/cgroup |
-                head --lines 1 |
-                cut --delimiter / --fields 4
-        )
+        container_id="$(
+            curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods?labelSelector=statefulset.kubernetes.io/pod-name%3D$PODNAME" \
+                --cacert "$CA_PATH" --header "Authorization: Bearer $(cat "$TOKEN_PATH")" --silent |
+                jq --raw-output '.items[] | .status.containerStatuses[] | select(.name == "node") | .containerID' |
+                sed --expression 's|containerd://||g'
+        )"
         ARCHITECTURE="$(dpkg --print-architecture)"
 
         echo "starting telemetry collector"
@@ -70,11 +71,11 @@ start_otel_server() {
         cp "$USE_OTEL_CONFIG" "$OTEL_CONFIG"
 
         sed "$OTEL_CONFIG" \
-            --expression "s/@CHAIN_ID@/${CHAIN_ID}/" \
-            --expression "s/@CONTAINER_ID@/${CONTAINER_ID}/" \
-            --expression "s/@HONEYCOMB_API_KEY@/${HONEYCOMB_API_KEY}/" \
-            --expression "s/@HONEYCOMB_DATASET@/${HONEYCOMB_DATASET}/" \
-            --expression "s/@NAMESPACE@/${NAMESPACE}/" \
+            --expression "s/@CHAIN_ID@/$CHAIN_ID/" \
+            --expression "s/@CLUSTER_NAME@/$CLUSTER_NAME/" \
+            --expression "s/@CONTAINER_ID@/$CONTAINER_ID/" \
+            --expression "s/@NAMESPACE@/$NAMESPACE/" \
+            --expression "s/@PODNAME@/$PODNAME/" \
             --in-place
 
         curl "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_${ARCHITECTURE}.tar.gz" \

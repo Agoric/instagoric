@@ -7,4 +7,4 @@ SCRIPT_NAME="$(basename "$0")"
 
 CHAIN_NAME="${SCRIPT_NAME%.sh}" \
   CHAIN_RPC="http://$RPCNODES_SERVICE_HOST:$RPCNODES_SERVICE_PORT" \
-  /bin/bash "$DIRECTORY_PATH/add-agoric-chain.sh"
+  /bin/bash "$DIRECTORY_PATH/add-local-chain.sh"
