@@ -92,7 +92,7 @@ case "$ROLE" in
         fi
     fi
 
-    /bin/bash /entrypoint/cron.sh
+    /bin/bash "$CURRENT_DIRECTORY_PATH/cron.sh"
     auto_approve "$SELF_KEYNAME" &
     start_chain "$APP_LOG_FILE"
     ;;
@@ -172,7 +172,7 @@ case "$ROLE" in
     WHALE_KEYNAME="$WHALE_KEYNAME" POD_NAME="$FIRST_FORK_STATEFUL_SET_NAME" SEED_ENABLE=no NODE_ID="$FIRST_FORK_NODE_ID" start_helper_wrapper
     fork_setup "agoric1"
 
-    /bin/bash /entrypoint/cron.sh
+    /bin/bash "$CURRENT_DIRECTORY_PATH/cron.sh"
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     auto_approve "$WHALE_KEYNAME" &
@@ -207,7 +207,7 @@ case "$ROLE" in
         touch "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized"
     fi
 
-    /bin/bash /entrypoint/cron.sh
+    /bin/bash "$CURRENT_DIRECTORY_PATH/cron.sh"
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     start_chain "$APP_LOG_FILE"
