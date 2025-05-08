@@ -298,6 +298,87 @@ has_node_caught_up() {
     test "$(get_node_info | jq --raw-output '.SyncInfo.catching_up')" == "false"
 }
 
+initialize_new_chain() {
+    local current_config
+    local resolved_config="$1"
+
+    current_config="$(cat "$resolved_config")"
+
+    echo "Initializing chain"
+    agd init --chain-id "$CHAIN_ID" --home "$AGORIC_HOME" "$PODNAME"
+    agoric set-defaults ag-chain-cosmos "$AGORIC_HOME"/config
+
+    if ! test -f "/state/$NODE_KEY_FILE_NAME"; then
+        cp "$AGORIC_HOME/config/$NODE_KEY_FILE_NAME" "/state/$NODE_KEY_FILE_NAME"
+    fi
+
+    cp "/state/$NODE_KEY_FILE_NAME" "$AGORIC_HOME/config/$NODE_KEY_FILE_NAME"
+
+    if test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"; then
+        create_self_key
+        agd add-genesis-account "$SELF_KEYNAME" "50000000ubld" --home "$AGORIC_HOME" --keyring-backend "test"
+
+        if test -n "$WHALE_SEED"; then
+            for ((i = 0; i <= WHALE_DERIVATIONS; i++)); do
+                add_whale_key "$i"
+                agd add-genesis-account "${WHALE_KEYNAME}_${i}" "$WHALE_IBC_DENOMS" --home "$AGORIC_HOME" --keyring-backend "test"
+            done
+        fi
+
+        if test -n "$FAUCET_ADDRESS"; then
+            agd add-genesis-account "$FAUCET_ADDRESS" "$WHALE_IBC_DENOMS" --home "$AGORIC_HOME" --keyring-backend "test"
+        fi
+
+        agd gentx "$SELF_KEYNAME" "50000000ubld" \
+            --chain-id "$CHAIN_ID" \
+            --commission-max-change-rate "0.01" \
+            --commission-max-rate "0.20" \
+            --commission-rate "0.10" \
+            --details "$PRIMARY_VALIDATOR_MONIKET_NAME" \
+            --home "$AGORIC_HOME" \
+            --ip "127.0.0.1" \
+            --keyring-backend "test" \
+            --min-self-delegation "1" \
+            --moniker "$PRIMARY_VALIDATOR_MONIKET_NAME"
+
+        agd collect-gentxs --home "$AGORIC_HOME"
+
+        contents="$(
+            jq --arg config_file_path "${resolved_config//"$SDK_ROOT_PATH/packages"/"@agoric"}" \
+                --arg denom "$BLD_DENOM" \
+                --arg voting_period "$VOTING_PERIOD" \
+                '
+                .app_state.swingset.params.bootstrap_vat_config = $config_file_path |
+                .app_state.crisis.constant_fee.denom = $denom |
+                .app_state.mint.params.mint_denom = $denom |
+                .app_state.gov.deposit_params.min_deposit[0].denom = $denom |
+                .app_state.staking.params.bond_denom = $denom |
+                .app_state.slashing.params.signed_blocks_window = "10000" |
+                .app_state.mint.minter.inflation = "0.000000000000000000" |
+                .app_state.mint.params.inflation_rate_change = "0.000000000000000000" |
+                .app_state.mint.params.inflation_min = "0.000000000000000000" |
+                .app_state.mint.params.inflation_max = "0.000000000000000000" |
+                .app_state.gov.voting_params.voting_period = $voting_period
+            ' <"$GENESIS_FILE_PATH"
+        )"
+
+        if test -n "$BLOCK_COMPUTE_LIMIT"; then
+            # TODO: Select blockComputeLimit by name instead of index
+            contents="$(
+                jq --arg block_compute_limit "$BLOCK_COMPUTE_LIMIT" \
+                    '.app_state.swingset.params.beans_per_unit[0].beans = $block_compute_limit'
+            )"
+        fi
+
+        echo -E "$contents" >"$GENESIS_FILE_PATH"
+
+    else
+        if test "$ROLE" != "$FIRST_FORK_STATEFUL_SET_NAME" && test "$ROLE" != "$SECOND_FORK_STATEFUL_SET_NAME" && test "$ROLE" != "$FOLLOWER_STATEFUL_SET_NAME"; then
+            get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
+        fi
+    fi
+}
+
 patch_validator_config() {
     if test -n "${CONSENSUS_TIMEOUT_PROPOSE}"; then
         sed "$AGORIC_HOME/config/config.toml" \
@@ -318,6 +399,53 @@ patch_validator_config() {
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^timeout_commit = .*|timeout_commit = '$CONSENSUS_TIMEOUT_COMMIT'|" \
             --in-place
+    fi
+}
+
+possibly_copy_core_dump_files() {
+    mkdir --parents "$CORE_DUMP_FILES_DIRECTORY"
+
+    ###########################################################################
+    # The default system core dump files have the format `/core.%e.%p.%t`     #
+    # When the entrypoint script exits, we will try to copy any dump files    #
+    # for future debugging purpose. Note that this will not always work       #
+    # as there is no guarantee that the dump file is created by that time,    #
+    # or wether a dump file was created at all                                #
+    ###########################################################################
+    sleep 5
+    find "/" -maxdepth "1" -name "core.*" -print0 |
+        xargs --null --replace="_file_" cp _file_ "$CORE_DUMP_FILES_DIRECTORY"
+}
+
+setup_a3p_snapshot_data() {
+    local config_zip_path="/state/config.tar.gz"
+    local data_zip_path="/state/data.tar.gz"
+    local key_ring_zip_path="/state/keyring-test.tar.gz"
+
+    curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/config-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+        --fail --location --output "$config_zip_path" --silent
+    curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/data-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+        --fail --location --output "$data_zip_path" --silent
+    curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/keyring-test-$A3P_SNAPSHOT_TIMESTAMP.tar.gz" \
+        --fail --location --output "$key_ring_zip_path" --silent
+
+    tar --extract --file "$config_zip_path" --gzip --directory "$AGORIC_HOME"
+    tar --extract --file "$data_zip_path" --gzip --directory "$AGORIC_HOME"
+    tar --extract --file "$key_ring_zip_path" --gzip --directory "$AGORIC_HOME"
+
+    rm --force "$config_zip_path" "$data_zip_path" "$key_ring_zip_path"
+
+    if test "$ROLE" == "$VALIDATOR_STATEFUL_SET_NAME" || test "$ROLE" == "$SEED_STATEFUL_SET_NAME"; then
+        sed "$AGORIC_HOME/config/config.toml" --expression "s|^moniker = .*|moniker = '$PODNAME'|" --in-place
+    else
+        if test "$ROLE" != "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"; then
+            echo "Not supported for $ROLE pod"
+        else
+            curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/node-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
+                --fail --location --output "$AGORIC_HOME/config/$NODE_KEY_FILE_NAME" --silent
+            curl "$A3P_SNAPSHOT_IMAGE_URL/$CHAIN_ID/priv-validator-key-$A3P_SNAPSHOT_TIMESTAMP.json" \
+                --fail --location --output "$AGORIC_HOME/config/priv_validator_key.json" --silent
+        fi
     fi
 }
 
@@ -349,6 +477,92 @@ start_helper() {
             sleep 1
         done
     )
+}
+
+update_config_files() {
+    if test -n "$PRUNING"; then
+        sed --in-place "s/^pruning =.*/pruning = \"$PRUNING\"/" "$AGORIC_HOME/config/app.toml"
+    else
+        sed "$AGORIC_HOME/config/app.toml" \
+            --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
+            --expression 's|^pruning-keep-every =.*|pruning-keep-every = 1000|' \
+            --expression 's|^pruning-interval =.*|pruning-interval = 1000|' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval[[:space:]]*=.*|snapshot-interval = 1000|}' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent[[:space:]]*=.*|snapshot-keep-recent = 10|}' \
+            --in-place
+    fi
+
+    sed "$AGORIC_HOME/config/app.toml" \
+        --expression '/^\[telemetry]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26652"/}' \
+        --expression '/^\[telemetry]/,/^\[/{s/^prometheus-retention-time[[:space:]]*=.*/prometheus-retention-time = 60/}' \
+        --expression '/^\[telemetry]/,/^\[/{s/^enabled[[:space:]]*=.*/enabled = true/}' \
+        --expression '/^\[api]/,/^\[/{s/^enable[[:space:]]*=.*/enable = true/}' \
+        --expression '/^\[api]/,/^\[/{s/^enabled-unsafe-cors[[:space:]]*=.*/enabled-unsafe-cors = true/}' \
+        --expression '/^\[api]/,/^\[/{s/^swagger[[:space:]]*=.*/swagger = false/}' \
+        --expression '/^\[api]/,/^\[/{s/^address[[:space:]]*=.*/address = "tcp:\/\/0.0.0.0:1317"/}' \
+        --expression '/^\[api]/,/^\[/{s/^max-open-connections[[:space:]]*=.*/max-open-connections = 1000/}' \
+        --expression 's/^rpc-max-body-bytes =.*/rpc-max-body-bytes = \"15000000\"/' \
+        --in-place
+
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression 's/^log_level/# log_level/' \
+        --expression 's/^allow_duplicate_ip =.*/allow_duplicate_ip = true/' \
+        --expression 's/^prometheus = false/prometheus = true/' \
+        --expression 's/^addr_book_strict = true/addr_book_strict = false/' \
+        --expression 's/^max_num_inbound_peers =.*/max_num_inbound_peers = 150/' \
+        --expression 's/^max_num_outbound_peers =.*/max_num_outbound_peers = 150/' \
+        --expression "/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = 'tcp:\/\/0.0.0.0:$RPC_PORT'/}" \
+        --in-place
+}
+
+update_swingset_config_file() {
+    local addr1
+    local addr2
+    local addr3
+    local current_config
+    local resolved_config="$1"
+
+    current_config="$(cat "$resolved_config")"
+
+    if test -n "$ENDORSED_UI"; then
+        current_config="$(
+            echo "$current_config" |
+                sed --expression "s|bafybeidvpbtlgefi3ptuqzr2fwfyfjqfj6onmye63ij7qkrb4yjxekdh3e|$ENDORSED_UI|"
+        )"
+    fi
+
+    if test -n "$GC_INTERVAL"; then
+        current_config="$(
+            echo "$current_config" |
+                jq --arg "freq" "$GC_INTERVAL" '. + {defaultReapInterval: ($freq | tonumber)}'
+        )"
+    fi
+
+    if test -n "$PSM_GOV_A"; then
+        addr1="$(
+            echo "$PSM_GOV_A" |
+                add_key "econ" --dry-run --output "json" --recover |
+                jq --raw-output '.address'
+        )"
+        addr2="$(
+            echo "$PSM_GOV_B" |
+                add_key "econ" --dry-run --output "json" --recover |
+                jq --raw-output '.address'
+        )"
+        addr3="$(
+            echo "$PSM_GOV_C" |
+                add_key "econ" --dry-run --output "json" --recover |
+                jq --raw-output '.address'
+        )"
+
+        current_config="$(
+            echo "$current_config" |
+                jq --arg "addr1" "$addr1" --arg "addr2" "$addr2" --arg "addr3" "$addr3" \
+                    '.vats.bootstrap.parameters.economicCommitteeAddresses? |= {"gov1": $addr1, "gov2": $addr2, "gov3": $addr3}'
+        )"
+    fi
+
+    echo -E "$current_config" >"$resolved_config"
 }
 
 wait_for_pod() {
