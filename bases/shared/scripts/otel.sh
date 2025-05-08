@@ -65,4 +65,4 @@ wait_for_container_id() {
     done
 }
 
-main
+main &
