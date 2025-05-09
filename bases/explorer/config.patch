@@ -155,3 +155,30 @@ index 2a04d56a..32d9b98e 100644
          bip44: {
              coinType: Number(chain.coinType),
          },
+diff --git a/src/modules/[chain]/ibc/connection.vue b/src/modules/[chain]/ibc/connection.vue
+index 8b3b6727..cbaabe99 100644
+--- a/src/modules/[chain]/ibc/connection.vue
++++ b/src/modules/[chain]/ibc/connection.vue
+@@ -24,13 +24,18 @@ onMounted(() => {
+ });
+ 
+ function pageload(p: number) {
+-  pageRequest.value.setPage(p)
+-  chainStore.rpc.getIBCConnections(pageRequest.value).then((x) => {
++  pageRequest.value.setPage(p);
++  router.isReady().then(
++    () => chainStore.rpc.getIBCConnections(pageRequest.value)
++  ).then((x) => {
+     list.value = x.connections;
+-    pageResponse.value = x.pagination
+-    if(x.pagination.total && Number(x.pagination.total) > 0) {
++    pageResponse.value = x.pagination;
++    if (
++      router.currentRoute.value.path.match(new RegExp(`^/${props.chain}/ibc/connection$`)) &&
++      x.pagination.total &&
++      Number(x.pagination.total) > 0
++    )
+       ibcStore.showConnection(0)
+-    }
+   });
+ }
