@@ -12,7 +12,7 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
     "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
 
 # shellcheck source=./otel.sh
-/bin/bash "$CURRENT_DIRECTORY_PATH/otel.sh" "$OTEL_LOG_FILE"
+/bin/bash "$CURRENT_DIRECTORY_PATH/otel.sh" > "$OTEL_LOG_FILE" 2>&1 &
 
 # shellcheck source=./util.sh
 source "$CURRENT_DIRECTORY_PATH/util.sh"

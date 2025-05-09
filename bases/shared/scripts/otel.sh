@@ -1,10 +1,10 @@
 #! /bin/bash
 
-set -o nounset
+set -o nounset -o xtrace
 
 ARCHITECTURE="$(dpkg --print-architecture)"
 CONTAINER_ID=""
-LOGS_FILE_PATH="$1"
+CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 OTEL_CONFIG="$HOME/instagoric-otel-config.yaml"
 OTEL_RELEASE_SOURCE="https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download"
 
@@ -35,7 +35,7 @@ main() {
 }
 
 start_server() {
-    "$HOME/otelcol-contrib" --config "$OTEL_CONFIG" >>"$LOGS_FILE_PATH" 2>&1
+    "$HOME/otelcol-contrib" --config "$OTEL_CONFIG"
 }
 
 substitue_values_in_config() {
@@ -53,16 +53,16 @@ wait_for_container_id() {
         CONTAINER_ID="$(
             curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods?labelSelector=statefulset.kubernetes.io/pod-name%3D$PODNAME" \
                 --cacert "$CA_PATH" --header "Authorization: Bearer $(cat "$TOKEN_PATH")" --silent |
-                jq --raw-output ".items[] | .status.containerStatuses[] | select(.name == '$CONTAINER_NAME') | .containerID" |
+                jq --arg container_name "$CONTAINER_NAME" --raw-output '.items[] | .status.containerStatuses[] | select(.name == $container_name) | .containerID' |
                 sed --expression "s|containerd://||g"
         )"
 
         if test "$CONTAINER_ID" == "null"; then
             sleep 5
         else
-            echo "Current Container ID: $CONTAINER_ID"
+            break
         fi
     done
 }
 
-main &
+main
