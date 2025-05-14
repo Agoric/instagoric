@@ -374,7 +374,7 @@ privateapp.get('/ips', (req, res) => {
 
 privateapp.get('/genesis.json', async (req, res) => {
   try {
-    const file = `/state/${chainId}/config/genesis_final.json`;
+    const file = process.env.GENESIS_FILE_PATH;
     if (await fs.pathExists(file)) {
       const buf = await fs.readFile(file, 'utf8');
       res.send(buf);

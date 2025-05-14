@@ -8,7 +8,6 @@ add_key() {
     shift
 
     agd keys add "$keyName" \
-        --home "$AGORIC_HOME" \
         --keyring-backend "test" \
         "$@"
 }
@@ -19,6 +18,7 @@ add_whale_key() {
 
     echo "$WHALE_SEED" |
         add_key "${WHALE_KEYNAME}_${keyNumber}" \
+            --home "$AGORIC_HOME" \
             --index "$keyNumber" \
             --recover
 }
@@ -88,7 +88,7 @@ auto_approve() {
 }
 
 create_self_key() {
-    add_key "self" >/state/self.out 2>&1
+    add_key "self" --home "$AGORIC_HOME" >/state/self.out 2>&1
     tail --lines 1 /state/self.out >/state/self.key
     agd keys show "self" \
         --address \
@@ -365,8 +365,9 @@ initialize_new_chain() {
         if test -n "$BLOCK_COMPUTE_LIMIT"; then
             # TODO: Select blockComputeLimit by name instead of index
             contents="$(
-                jq --arg block_compute_limit "$BLOCK_COMPUTE_LIMIT" \
-                    '.app_state.swingset.params.beans_per_unit[0].beans = $block_compute_limit'
+                echo "$contents" |
+                    jq --arg block_compute_limit "$BLOCK_COMPUTE_LIMIT" \
+                        '.app_state.swingset.params.beans_per_unit[0].beans = $block_compute_limit'
             )"
         fi
 
