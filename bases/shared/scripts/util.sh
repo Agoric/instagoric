@@ -375,7 +375,7 @@ initialize_new_chain() {
 
     else
         if test "$ROLE" != "$FIRST_FORK_STATEFUL_SET_NAME" && test "$ROLE" != "$SECOND_FORK_STATEFUL_SET_NAME" && test "$ROLE" != "$FOLLOWER_STATEFUL_SET_NAME"; then
-            get_primary_validator_genesis >"$AGORIC_HOME/config/genesis.json"
+            get_primary_validator_genesis >"$GENESIS_FILE_PATH"
         fi
     fi
 }
