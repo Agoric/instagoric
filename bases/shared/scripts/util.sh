@@ -508,7 +508,6 @@ update_config_files() {
     sed "$AGORIC_HOME/config/config.toml" \
         --expression 's/^log_level/# log_level/' \
         --expression 's/^allow_duplicate_ip =.*/allow_duplicate_ip = true/' \
-        --expression 's/^prometheus = false/prometheus = true/' \
         --expression 's/^addr_book_strict = true/addr_book_strict = false/' \
         --expression 's/^max_num_inbound_peers =.*/max_num_inbound_peers = 150/' \
         --expression 's/^max_num_outbound_peers =.*/max_num_outbound_peers = 150/' \

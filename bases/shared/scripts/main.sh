@@ -12,7 +12,7 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
     "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
 
 # shellcheck source=./otel.sh
-/bin/bash "$CURRENT_DIRECTORY_PATH/otel.sh" > "$OTEL_LOG_FILE" 2>&1 &
+/bin/bash "$CURRENT_DIRECTORY_PATH/otel.sh" >"$OTEL_LOG_FILE" 2>&1 &
 
 # shellcheck source=./util.sh
 source "$CURRENT_DIRECTORY_PATH/util.sh"
@@ -67,6 +67,11 @@ echo "Firstboot: $firstboot"
 if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"; then
     patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
 fi
+
+sed "$AGORIC_HOME/config/config.toml" \
+    --expression 's|^prometheus = false|prometheus = true|' \
+    --expression 's|^\(\s*namespace\s*=\s*\)"tendermint"|\1"cometbft"|' \
+    --in-place
 
 case "$ROLE" in
 "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
@@ -189,16 +194,16 @@ case "$ROLE" in
     WHALE_KEYNAME="dummy" POD_NAME="$FOLLOWER_STATEFUL_SET_NAME" start_helper_wrapper
     if ! test -f "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized"; then
         apt-get update
-        apt install axel lz4 --yes
+        apt install lz4 --yes
 
         if ! test -f "/state/$MAINNET_SNAPSHOT"; then
-            axel --num-connections "10" --output "$MAINNET_SNAPSHOT" --quiet "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT"
+            curl --location --output "/state/$MAINNET_SNAPSHOT" --silent "$MAINNET_SNAPSHOT_URL/$MAINNET_SNAPSHOT"
         fi
 
-        tar --directory "$AGORIC_HOME" --extract --file "$MAINNET_SNAPSHOT" --use-compress-program "lz4"
+        tar --directory "$AGORIC_HOME" --extract --file "/state/$MAINNET_SNAPSHOT" --use-compress-program "lz4"
 
         curl "$MAINNET_ADDRBOOK_URL" --fail --location --output "/state/addrbook.json" --silent
-        cp --force "addrbook.json" "$AGORIC_HOME/config/addrbook.json"
+        cp --force "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json"
 
         sed "$AGORIC_HOME/config/app.toml" \
             --expression 's|\[rosetta\]\renable = true|\[rosetta\]\renable = false|' \
