@@ -44,6 +44,7 @@ start_helper_for_validator() {
 }
 
 echo "ROLE: $ROLE"
+
 echo "whale keyname: $(get_whale_keyname)"
 firstboot="false"
 
@@ -77,19 +78,21 @@ case "$ROLE" in
 "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
     start_helper_for_validator
 
-    if [[ $firstboot == "true" ]]; then
+    if test "$firstboot" == "true"; then
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
     fi
 
     external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
-    sed -i.bak "s/^external_address =.*/external_address = \"$external_address:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
-    if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-        export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "s|^external_address =.*|external_address = \"$external_address:$P2P_PORT\"|" \
+        --in-place
+    if test -n "$ENABLE_XSNAP_DEBUG"; then
+        export XSNAP_TEST_RECORD="$AGORIC_HOME/xs_test_record_$BOOT_TIME"
     fi
     patch_validator_config
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    if [[ ! -f "$AGORIC_HOME/registered" ]]; then
+    if ! test -f "$AGORIC_HOME/registered"; then
         if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
             wait_till_syncup_and_fund "$VALIDATOR_KEY_NAME" &
         else
@@ -104,29 +107,33 @@ case "$ROLE" in
 
 "$VALIDATOR_STATEFUL_SET_NAME")
     start_helper_for_validator
+    create_self_key
 
-    if [[ $firstboot == "true" ]]; then
-        create_self_key
-        PEERS="$PRIMARY_NOD_PEER_ID@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
-        SEEDS="$SEED_NOD_PEER_ID@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+    if test "$firstboot" == "true"; then
+        primary_node_peer_id="$(get_node_id "$PRIMARY_ENDPOINT:$RPC_PORT")"
+        PEERS="$primary_node_peer_id@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+        SEEDS="$(get_node_id "$SEED_ENDPOINT:$RPC_PORT")@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
 
-        sed -i.bak -e "s/^seeds =.*/seeds = \"$SEEDS\"/; s/^persistent_peers =.*/persistent_peers = \"$PEERS\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^unconditional_peer_ids =.*/unconditional_peer_ids = \"$PRIMARY_NOD_PEER_ID\"/" "$AGORIC_HOME/config/config.toml"
-        sed -i.bak "s/^persistent_peers_max_dial_period =.*/persistent_peers_max_dial_period = \"1s\"/" "$AGORIC_HOME/config/config.toml"
+        sed "$AGORIC_HOME/config/config.toml" \
+            --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
+            --expression "s|^persistent_peers_max_dial_period = .*|persistent_peers_max_dial_period = '1s'|" \
+            --expression "s|^seeds =.*|seeds = '$SEEDS'|" \
+            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
+            --in-place
     fi
-    sed -i.bak "s/^external_address =.*/external_address = \"$POD_IP:$P2P_PORT\"/" "$AGORIC_HOME/config/config.toml"
+    sed "$AGORIC_HOME/config/config.toml" \
+        --expression "s|^external_address =.*|external_address = '$POD_IP:$P2P_PORT'|" \
+        --in-place
 
-    if ! test -f "$AGORIC_HOME/registered"; then
-        if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
-            wait_till_syncup_and_register "$VALIDATOR_KEY_NAME" &
-        else
-            add_whale_key "$(get_whale_index)"
-            wait_till_syncup_and_register "$(get_whale_keyname)" &
-        fi
+    if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
+        wait_till_syncup_and_register "$VALIDATOR_KEY_NAME" &
+    else
+        add_whale_key "$(get_whale_index)"
+        wait_till_syncup_and_register "$(get_whale_keyname)" &
     fi
 
-    if [[ -n "${ENABLE_XSNAP_DEBUG}" ]]; then
-        export XSNAP_TEST_RECORD="${AGORIC_HOME}/xs_test_record_${BOOT_TIME}"
+    if test -n "$ENABLE_XSNAP_DEBUG"; then
+        export XSNAP_TEST_RECORD="$AGORIC_HOME/xs_test_record_$BOOT_TIME"
     fi
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
     patch_validator_config
@@ -139,15 +146,18 @@ case "$ROLE" in
     ;;
 "$SEED_STATEFUL_SET_NAME")
     start_helper_for_validator
+    create_self_key
 
+    primary_node_peer_id="$(get_node_id "$PRIMARY_ENDPOINT:$RPC_PORT")"
     primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
     seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
 
-    PEERS="$PRIMARY_NOD_PEER_ID@$primary_validator_external_address:$P2P_PORT"
-    SEEDS="$SEED_NOD_PEER_ID@$seed_external_address:$P2P_PORT"
+    PEERS="$primary_node_peer_id@$primary_validator_external_address:$P2P_PORT"
 
-    if [[ $firstboot == "true" ]]; then
-        create_self_key
+    if test "$firstboot" == "true"; then
+        seed_node_peer_id="$(agd tendermint show-node-id --home "$AGORIC_HOME")"
+
+        SEEDS="$seed_node_peer_id@$seed_external_address:$P2P_PORT"
 
         cp "/config/network/seed_node_key.json" "$AGORIC_HOME/config/node_key.json"
 
@@ -155,7 +165,7 @@ case "$ROLE" in
             --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
             --in-place
         sed "$AGORIC_HOME/config/config.toml" \
-            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$PRIMARY_NOD_PEER_ID'|" \
+            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
             --in-place
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^seed_mode = .*|seed_mode = true|" \
@@ -170,7 +180,9 @@ case "$ROLE" in
         --in-place
 
     # Must not run state-sync unless we have enough non-pruned state for it.
-    sed -i.bak '/^\[state-sync]/,/^\[/{s/^snapshot-interval[[:space:]]*=.*/snapshot-interval = 0/}' "$AGORIC_HOME/config/app.toml"
+    sed "$AGORIC_HOME/config/app.toml" \
+        --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 0|}' \
+        --in-place
     start_chain "$APP_LOG_FILE" --pruning everything
     ;;
 "$FIRST_FORK_STATEFUL_SET_NAME")
@@ -223,7 +235,7 @@ case "$ROLE" in
     ;;
 esac
 
-status=$?
+status="$?"
 
 possibly_copy_core_dump_files
 

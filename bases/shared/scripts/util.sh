@@ -1,4 +1,7 @@
 #! /bin/bash
+# shellcheck disable=SC2119,SC2120
+
+CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>"$VOID" && pwd)"
 
 # shellcheck source=./source.sh
 source "$CURRENT_DIRECTORY_PATH/source.sh"
@@ -14,12 +17,14 @@ add_key() {
 
 add_whale_key() {
     test -n "$WHALE_SEED" || return 1
-    local keyNumber="${1:-"0"}"
+    local key_number="${1:-"0"}"
+    local wallet_name="${WHALE_KEYNAME}_${key_number}"
 
-    echo "$WHALE_SEED" |
-        add_key "${WHALE_KEYNAME}_${keyNumber}" \
+    agd keys show "$wallet_name" --home "$AGORIC_HOME" --keyring-backend "test" >"$VOID" 2>&1 ||
+        echo "$WHALE_SEED" |
+        add_key "$wallet_name" \
             --home "$AGORIC_HOME" \
-            --index "$keyNumber" \
+            --index "$key_number" \
             --recover
 }
 
@@ -38,7 +43,7 @@ auto_approve() {
                     --chain-id "$CHAIN_ID" \
                     --home "$AGORIC_HOME" \
                     --output "json" \
-                    --status "VotingPeriod" 2>/dev/null
+                    --status "VotingPeriod" 2>"$VOID"
             )"
 
             proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"
@@ -49,7 +54,7 @@ auto_approve() {
                         agd query gov votes "$proposal_id" \
                             --chain-id "$CHAIN_ID" \
                             --home "$AGORIC_HOME" \
-                            --output json 2>/dev/null
+                            --output json 2>"$VOID"
                     )"
                     account_vote="$(
                         test -n "$votes" && echo "$votes" |
@@ -74,7 +79,7 @@ auto_approve() {
                         --from "$wallet_name" \
                         --home "$AGORIC_HOME" \
                         --keyring-backend "test" \
-                        --yes >/dev/null
+                        --yes >"$VOID"
 
                     echo "Voted YES on proposal ID: $proposal_id"
                 done
@@ -88,12 +93,8 @@ auto_approve() {
 }
 
 create_self_key() {
-    add_key "self" --home "$AGORIC_HOME" >/state/self.out 2>&1
-    tail --lines 1 /state/self.out >/state/self.key
-    agd keys show "self" \
-        --address \
-        --home "$AGORIC_HOME" \
-        --keyring-backend "test" >/state/self.address
+    agd keys show "$SELF_KEYNAME" --home "$AGORIC_HOME" --keyring-backend "test" >"$VOID" 2>&1 ||
+        add_key "$SELF_KEYNAME" --home "$AGORIC_HOME" >"/state/$SELF_KEYNAME.out"
 }
 
 ensure_balance() {
@@ -109,7 +110,7 @@ ensure_balance() {
 
     from="$1"
     amount="$2"
-    to="$(cat "/state/self.address")"
+    to="$(agd keys show "$SELF_KEYNAME" --address --home "$AGORIC_HOME" --keyring-backend "test")"
     want=${amount//,/ }
 
     while true; do
@@ -196,7 +197,7 @@ get_ips() {
     local service_name=$1
 
     while true; do
-        if json=$(curl --fail --max-time "15" --silent --show-error "http://localhost:$PRIVATE_APP_PORT/ips"); then
+        if json=$(curl --fail --max-time "15" --show-error --silent "http://localhost:$PRIVATE_APP_PORT/ips"); then
             if test "$(echo "$json" | jq --raw-output '.status')" == "1"; then
                 if ip="$(echo "$json" | jq --raw-output ".ips.\"$service_name\"")"; then
                     echo "$ip"
@@ -209,8 +210,23 @@ get_ips() {
     done
 }
 
+get_node_id() {
+    local endpoint="$1"
+    local node_info=""
+
+    while true; do
+        node_info="$(get_node_info "$endpoint")"
+        if test -n "$node_info"; then
+            echo "$node_info" | jq '.NodeInfo.id' --raw-output
+            break
+        fi
+        sleep 5
+    done
+}
+
 get_node_info() {
-    agd status --home "$AGORIC_HOME"
+    local node_url="${1:-"http://0.0.0.0:$RPC_PORT"}"
+    agd status --home "$AGORIC_HOME" --node "$node_url"
 }
 
 get_pod_ip() {
@@ -306,7 +322,7 @@ initialize_new_chain() {
 
     echo "Initializing chain"
     agd init --chain-id "$CHAIN_ID" --home "$AGORIC_HOME" "$PODNAME"
-    agoric set-defaults ag-chain-cosmos "$AGORIC_HOME"/config
+    agoric set-defaults ag-chain-cosmos "$AGORIC_HOME/config"
 
     if ! test -f "/state/$NODE_KEY_FILE_NAME"; then
         cp "$AGORIC_HOME/config/$NODE_KEY_FILE_NAME" "/state/$NODE_KEY_FILE_NAME"
@@ -334,12 +350,12 @@ initialize_new_chain() {
             --commission-max-change-rate "0.01" \
             --commission-max-rate "0.20" \
             --commission-rate "0.10" \
-            --details "$PRIMARY_VALIDATOR_MONIKET_NAME" \
+            --details "$PRIMARY_VALIDATOR_MONIKER_NAME" \
             --home "$AGORIC_HOME" \
             --ip "127.0.0.1" \
             --keyring-backend "test" \
             --min-self-delegation "1" \
-            --moniker "$PRIMARY_VALIDATOR_MONIKET_NAME"
+            --moniker "$PRIMARY_VALIDATOR_MONIKER_NAME"
 
         agd collect-gentxs --home "$AGORIC_HOME"
 
@@ -502,16 +518,16 @@ update_config_files() {
         --expression '/^\[api]/,/^\[/{s/^swagger[[:space:]]*=.*/swagger = false/}' \
         --expression '/^\[api]/,/^\[/{s/^address[[:space:]]*=.*/address = "tcp:\/\/0.0.0.0:1317"/}' \
         --expression '/^\[api]/,/^\[/{s/^max-open-connections[[:space:]]*=.*/max-open-connections = 1000/}' \
-        --expression 's/^rpc-max-body-bytes =.*/rpc-max-body-bytes = \"15000000\"/' \
+        --expression 's|^rpc-max-body-bytes =.*|rpc-max-body-bytes = \"15000000\"|' \
         --in-place
 
     sed "$AGORIC_HOME/config/config.toml" \
-        --expression 's/^log_level/# log_level/' \
-        --expression 's/^allow_duplicate_ip =.*/allow_duplicate_ip = true/' \
-        --expression 's/^addr_book_strict = true/addr_book_strict = false/' \
-        --expression 's/^max_num_inbound_peers =.*/max_num_inbound_peers = 150/' \
-        --expression 's/^max_num_outbound_peers =.*/max_num_outbound_peers = 150/' \
-        --expression "/^\[rpc]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = 'tcp:\/\/0.0.0.0:$RPC_PORT'/}" \
+        --expression 's|^log_level|# log_level|' \
+        --expression 's|^allow_duplicate_ip =.*|allow_duplicate_ip = true|' \
+        --expression 's|^addr_book_strict = true|addr_book_strict = false|' \
+        --expression 's|^max_num_inbound_peers =.*|max_num_inbound_peers = 150|' \
+        --expression 's|^max_num_outbound_peers =.*|max_num_outbound_peers = 150|' \
+        --expression "/^\[rpc]/,/^\[/{s|^laddr[[:space:]]*=.*|laddr = 'tcp://0.0.0.0:$RPC_PORT'|}" \
         --in-place
 }
 
@@ -628,35 +644,50 @@ wait_till_syncup_and_fund() {
 
 wait_till_syncup_and_register() {
     local stake_amount="50000000ubld"
+    local moniker="${2:-"$PODNAME"}"
+    local delegation_wallet_name="self"
     local wallet_name="$1"
+    local validator_address=""
+
+    validator_address="$(
+        agd keys show "$delegation_wallet_name" --address --bech "val" --home "$AGORIC_HOME" --keyring-backend "test" 2>"$VOID"
+    )"
 
     while true; do
         if has_node_caught_up; then
-            echo "caught up, register validator"
-            ensure_balance "$wallet_name" "$stake_amount"
-            sleep 10
-            agd tx staking create-validator \
-                --amount "$stake_amount" \
-                --chain-id "$CHAIN_ID" \
-                --commission-max-change-rate "0.01" \
-                --commission-max-rate "0.20" \
-                --commission-rate "0.10" \
-                --details "" \
-                --from "self" \
-                --gas "auto" \
-                --gas-adjustment "1.4" \
-                --home "$AGORIC_HOME" \
-                --keyring-backend "test" \
-                --min-self-delegation "1" \
-                --moniker "$PODNAME" \
-                --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
-                --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
-                --website "http://$POD_IP:$RPC_PORT" \
-                --yes
-            touch "$AGORIC_HOME/registered"
+            if test -n "$validator_address"; then
+                if ! agd query staking validator "$validator_address" --home "$AGORIC_HOME" >"$VOID" 2>&1; then
+                    echo "caught up, register validator"
+                    ensure_balance "$wallet_name" "$stake_amount"
+                    sleep 10
+                    agd tx staking create-validator \
+                        --amount "$stake_amount" \
+                        --chain-id "$CHAIN_ID" \
+                        --commission-max-change-rate "0.01" \
+                        --commission-max-rate "0.20" \
+                        --commission-rate "0.10" \
+                        --details "" \
+                        --from "$delegation_wallet_name" \
+                        --gas "auto" \
+                        --gas-adjustment "1.4" \
+                        --home "$AGORIC_HOME" \
+                        --keyring-backend "test" \
+                        --min-self-delegation "1" \
+                        --moniker "$moniker" \
+                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                        --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
+                        --website "http://$POD_IP:$RPC_PORT" \
+                        --yes
+                    touch "$AGORIC_HOME/registered"
 
-            sleep 10
-            return
+                    sleep 10
+                else
+                    echo "Current node is already a validator (address: '$validator_address')"
+                fi
+            else
+                echo "Wallet '$delegation_wallet_name' not found"
+            fi
+            break
         else
             echo "not caught up, waiting to register validator"
         fi
