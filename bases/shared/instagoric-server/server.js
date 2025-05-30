@@ -112,7 +112,7 @@ const getNetworkConfig = async () => {
     `${primaryValidatorNodeId}@${
       svc.get(process.env.PRIMARY_VALIDATOR_SERVICE_NAME) ||
       `${process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
-    }`,
+    }:${process.env.P2P_PORT}`,
   ];
 
   ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
@@ -126,7 +126,7 @@ const getNetworkConfig = async () => {
       `${seedNodeId}@${
         svc.get(process.env.SEED_SERVICE_NAME) ||
         `${process.env.SEED_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
-      }`,
+      }:${process.env.P2P_PORT}`,
     ];
   } else ap.seeds = [];
 
