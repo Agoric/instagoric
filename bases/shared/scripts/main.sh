@@ -82,7 +82,7 @@ case "$ROLE" in
         cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
     fi
 
-    external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
+    external_address="$(get_ips "$PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME")"
     sed "$AGORIC_HOME/config/config.toml" \
         --expression "s|^external_address =.*|external_address = \"$external_address:$P2P_PORT\"|" \
         --in-place
@@ -110,9 +110,9 @@ case "$ROLE" in
     create_self_key
 
     if test "$firstboot" == "true"; then
-        primary_node_peer_id="$(get_node_id "$PRIMARY_ENDPOINT:$RPC_PORT")"
+        primary_node_peer_id="$(get_node_id_from_cluster_service "$PRIMARY_VALIDATOR_SERVICE_NAME")"
         PEERS="$primary_node_peer_id@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
-        SEEDS="$(get_node_id "$SEED_ENDPOINT:$RPC_PORT")@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+        SEEDS="$(get_node_id_from_cluster_service "$SEED_SERVICE_NAME")@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
 
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
@@ -148,9 +148,9 @@ case "$ROLE" in
     start_helper_for_validator
     create_self_key
 
-    primary_node_peer_id="$(get_node_id "$PRIMARY_ENDPOINT:$RPC_PORT")"
-    primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_SERVICE_NAME")"
-    seed_external_address="$(get_ips "$SEED_SERVICE_NAME")"
+    primary_node_peer_id="$(get_node_id_from_cluster_service "$PRIMARY_VALIDATOR_SERVICE_NAME")"
+    primary_validator_external_address="$(get_ips "$PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME")"
+    seed_external_address="$(get_ips "$SEED_EXTERNAL_SERVICE_NAME")"
 
     PEERS="$primary_node_peer_id@$primary_validator_external_address:$P2P_PORT"
 

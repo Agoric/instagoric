@@ -117,7 +117,7 @@ ensure_balance() {
         have="$(
             agd query bank balances "$to" \
                 --home "$AGORIC_HOME" \
-                --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
                 --output "json" |
                 jq --raw-output '.balances'
         )"
@@ -144,7 +144,7 @@ ensure_balance() {
             --chain-id "$CHAIN_ID" \
             --home "$AGORIC_HOME" \
             --keyring-backend "test" \
-            --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+            --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
             --output "json" \
             --yes)" && test -n "$response" && test "$(echo "$response" | jq --raw-output '.code')" -eq "0"; then
             echo "successfully sent $amount to $to"
@@ -210,12 +210,12 @@ get_ips() {
     done
 }
 
-get_node_id() {
-    local endpoint="$1"
+get_node_id_from_cluster_service() {
+    local service_name="$1"
     local node_info=""
 
     while true; do
-        node_info="$(get_node_info "$endpoint")"
+        node_info="$(get_node_info "http://$service_name.$NAMESPACE.svc.cluster.local:$RPC_PORT")"
         if test -n "$node_info"; then
             echo "$node_info" | jq '.NodeInfo.id' --raw-output
             break
@@ -264,7 +264,7 @@ get_pod_ip() {
 
 get_primary_validator_genesis() {
     while true; do
-        if json=$(curl --fail --max-time "15" --silent --show-error "$PRIMARY_ENDPOINT:$PRIVATE_APP_PORT/genesis.json"); then
+        if json=$(curl --fail --max-time "15" --silent --show-error "$PRIMARY_VALIDATOR_SERVICE_URL:$PRIVATE_APP_PORT/genesis.json"); then
             echo "$json"
             break
         fi
@@ -626,7 +626,7 @@ wait_till_syncup_and_fund() {
                     --chain-id "$CHAIN_ID" \
                     --home "$AGORIC_HOME" \
                     --keyring-backend "test" \
-                    --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                    --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
                     --output "json" \
                     --yes
             )"
@@ -674,7 +674,7 @@ wait_till_syncup_and_register() {
                         --keyring-backend "test" \
                         --min-self-delegation "1" \
                         --moniker "$moniker" \
-                        --node "$PRIMARY_ENDPOINT:$RPC_PORT" \
+                        --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
                         --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
                         --website "http://$POD_IP:$RPC_PORT" \
                         --yes

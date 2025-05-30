@@ -110,7 +110,7 @@ const getNetworkConfig = async () => {
 
   ap.peers = [
     `${primaryValidatorNodeId}@${
-      svc.get(process.env.PRIMARY_VALIDATOR_SERVICE_NAME) ||
+      svc.get(process.env.PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME) ||
       `${process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
     }:${process.env.P2P_PORT}`,
   ];
@@ -124,7 +124,7 @@ const getNetworkConfig = async () => {
     );
     ap.seeds = [
       `${seedNodeId}@${
-        svc.get(process.env.SEED_SERVICE_NAME) ||
+        svc.get(process.env.SEED_EXTERNAL_SERVICE_NAME) ||
         `${process.env.SEED_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
       }:${process.env.P2P_PORT}`,
     ];
@@ -156,8 +156,8 @@ const getNodeId = async service_name => {
 const getServices = async () => {
   if (FAKE)
     return new Map([
-      [process.env.PRIMARY_VALIDATOR_SERVICE_NAME, '1.1.1.1'],
-      [process.env.SEED_SERVICE_NAME, '1.1.1.2'],
+      [process.env.PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME, '1.1.1.1'],
+      [process.env.SEED_EXTERNAL_SERVICE_NAME, '1.1.1.2'],
     ]);
 
   const services = await makeKubernetesRequest(
