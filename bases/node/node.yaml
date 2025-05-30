@@ -18,7 +18,7 @@ spec:
 
     spec:
       terminationGracePeriodSeconds: 10
-      serviceAccountName: opentracing-agent
+      serviceAccountName: opentracing-agent-${namespace}
       containers:
         - name: node
           image: ghcr.io/agoric/agoric-sdk
