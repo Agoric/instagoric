@@ -525,8 +525,10 @@ update_config_files() {
         --expression 's|^log_level|# log_level|' \
         --expression 's|^allow_duplicate_ip =.*|allow_duplicate_ip = true|' \
         --expression 's|^addr_book_strict = true|addr_book_strict = false|' \
-        --expression 's|^max_num_inbound_peers =.*|max_num_inbound_peers = 150|' \
-        --expression 's|^max_num_outbound_peers =.*|max_num_outbound_peers = 150|' \
+        --expression "s|^max_num_inbound_peers =.*|max_num_inbound_peers = $MAXIMUM_INBOUND_PEERS|" \
+        --expression "s|^max_num_outbound_peers =.*|max_num_outbound_peers = $MAXIMUM_OUTBOUND_PEERS|" \
+        --expression 's|^namespace =.*|namespace = "cometbft"|' \
+        --expression 's|^prometheus = false|prometheus = true|' \
         --expression "/^\[rpc]/,/^\[/{s|^laddr[[:space:]]*=.*|laddr = 'tcp://0.0.0.0:$RPC_PORT'|}" \
         --in-place
 }

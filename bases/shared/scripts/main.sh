@@ -59,8 +59,6 @@ if ! test -f "$AGORIC_HOME/config/config.toml"; then
     else
         initialize_new_chain "$resolved_config"
     fi
-
-    update_config_files
 fi
 
 echo "Firstboot: $firstboot"
@@ -69,18 +67,11 @@ if test -f "$BOOTSTRAP_CONFIG_PATCH_FILE"; then
     patch --directory "$SDK_ROOT_PATH" --input "$BOOTSTRAP_CONFIG_PATCH_FILE" --strip "1"
 fi
 
-sed "$AGORIC_HOME/config/config.toml" \
-    --expression 's|^prometheus = false|prometheus = true|' \
-    --expression 's|^\(\s*namespace\s*=\s*\)"tendermint"|\1"cometbft"|' \
-    --in-place
+update_config_files
 
 case "$ROLE" in
 "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME")
     start_helper_for_validator
-
-    if test "$firstboot" == "true"; then
-        cp /config/network/node_key.json "$AGORIC_HOME/config/node_key.json"
-    fi
 
     external_address="$(get_ips "$PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME")"
     sed "$AGORIC_HOME/config/config.toml" \
@@ -109,20 +100,16 @@ case "$ROLE" in
     start_helper_for_validator
     create_self_key
 
-    if test "$firstboot" == "true"; then
-        primary_node_peer_id="$(get_node_id_from_cluster_service "$PRIMARY_VALIDATOR_SERVICE_NAME")"
-        PEERS="$primary_node_peer_id@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
-        SEEDS="$(get_node_id_from_cluster_service "$SEED_SERVICE_NAME")@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+    primary_node_peer_id="$(get_node_id_from_cluster_service "$PRIMARY_VALIDATOR_SERVICE_NAME")"
+    PEERS="$primary_node_peer_id@$PRIMARY_VALIDATOR_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
+    SEEDS="$(get_node_id_from_cluster_service "$SEED_SERVICE_NAME")@$SEED_STATEFUL_SET_NAME.$NAMESPACE.svc.cluster.local:$P2P_PORT"
 
-        sed "$AGORIC_HOME/config/config.toml" \
-            --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
-            --expression "s|^persistent_peers_max_dial_period = .*|persistent_peers_max_dial_period = '1s'|" \
-            --expression "s|^seeds =.*|seeds = '$SEEDS'|" \
-            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
-            --in-place
-    fi
     sed "$AGORIC_HOME/config/config.toml" \
         --expression "s|^external_address =.*|external_address = '$POD_IP:$P2P_PORT'|" \
+        --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
+        --expression "s|^persistent_peers_max_dial_period = .*|persistent_peers_max_dial_period = '1s'|" \
+        --expression "s|^seeds =.*|seeds = '$SEEDS'|" \
+        --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
         --in-place
 
     if test -n "$A3P_SNAPSHOT_TIMESTAMP"; then
@@ -154,29 +141,11 @@ case "$ROLE" in
 
     PEERS="$primary_node_peer_id@$primary_validator_external_address:$P2P_PORT"
 
-    if test "$firstboot" == "true"; then
-        seed_node_peer_id="$(agd tendermint show-node-id --home "$AGORIC_HOME")"
-
-        SEEDS="$seed_node_peer_id@$seed_external_address:$P2P_PORT"
-
-        cp "/config/network/seed_node_key.json" "$AGORIC_HOME/config/node_key.json"
-
-        sed "$AGORIC_HOME/config/config.toml" \
-            --expression "s|^seeds = .*|seeds = '$SEEDS'|" \
-            --in-place
-        sed "$AGORIC_HOME/config/config.toml" \
-            --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
-            --in-place
-        sed "$AGORIC_HOME/config/config.toml" \
-            --expression "s|^seed_mode = .*|seed_mode = true|" \
-            --in-place
-    fi
-
-    sed "$AGORIC_HOME/config/config.toml" \
-        --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
-        --in-place
     sed "$AGORIC_HOME/config/config.toml" \
         --expression "s|^external_address = .*|external_address = '$seed_external_address:$P2P_PORT'|" \
+        --expression "s|^persistent_peers = .*|persistent_peers = '$PEERS'|" \
+        --expression "s|^seed_mode = .*|seed_mode = true|" \
+        --expression "s|^unconditional_peer_ids = .*|unconditional_peer_ids = '$primary_node_peer_id'|" \
         --in-place
 
     # Must not run state-sync unless we have enough non-pruned state for it.
