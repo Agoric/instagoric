@@ -397,22 +397,22 @@ initialize_new_chain() {
 }
 
 patch_validator_config() {
-    if test -n "${CONSENSUS_TIMEOUT_PROPOSE}"; then
+    if test -n "$CONSENSUS_TIMEOUT_PROPOSE"; then
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^timeout_propose = .*|timeout_propose = '$CONSENSUS_TIMEOUT_PROPOSE'|" \
             --in-place
     fi
-    if test -n "${CONSENSUS_TIMEOUT_PREVOTE}"; then
+    if test -n "$CONSENSUS_TIMEOUT_PREVOTE"; then
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^timeout_prevote = .*|timeout_prevote = '$CONSENSUS_TIMEOUT_PREVOTE'|" \
             --in-place
     fi
-    if test -n "${CONSENSUS_TIMEOUT_PRECOMMIT}"; then
+    if test -n "$CONSENSUS_TIMEOUT_PRECOMMIT"; then
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^timeout_precommit = .*|timeout_precommit = '$CONSENSUS_TIMEOUT_PRECOMMIT'|" \
             --in-place
     fi
-    if test -n "${CONSENSUS_TIMEOUT_COMMIT}"; then
+    if test -n "$CONSENSUS_TIMEOUT_COMMIT"; then
         sed "$AGORIC_HOME/config/config.toml" \
             --expression "s|^timeout_commit = .*|timeout_commit = '$CONSENSUS_TIMEOUT_COMMIT'|" \
             --in-place
@@ -501,35 +501,36 @@ update_config_files() {
         sed --in-place "s/^pruning =.*/pruning = \"$PRUNING\"/" "$AGORIC_HOME/config/app.toml"
     else
         sed "$AGORIC_HOME/config/app.toml" \
-            --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
-            --expression 's|^pruning-keep-every =.*|pruning-keep-every = 1000|' \
             --expression 's|^pruning-interval =.*|pruning-interval = 1000|' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval[[:space:]]*=.*|snapshot-interval = 1000|}' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent[[:space:]]*=.*|snapshot-keep-recent = 10|}' \
+            --expression 's|^pruning-keep-every =.*|pruning-keep-every = 1000|' \
+            --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 1000|}' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent =.*|snapshot-keep-recent = 10|}' \
             --in-place
     fi
 
     sed "$AGORIC_HOME/config/app.toml" \
-        --expression '/^\[telemetry]/,/^\[/{s/^laddr[[:space:]]*=.*/laddr = "tcp:\/\/0.0.0.0:26652"/}' \
-        --expression '/^\[telemetry]/,/^\[/{s/^prometheus-retention-time[[:space:]]*=.*/prometheus-retention-time = 60/}' \
-        --expression '/^\[telemetry]/,/^\[/{s/^enabled[[:space:]]*=.*/enabled = true/}' \
-        --expression '/^\[api]/,/^\[/{s/^enable[[:space:]]*=.*/enable = true/}' \
-        --expression '/^\[api]/,/^\[/{s/^enabled-unsafe-cors[[:space:]]*=.*/enabled-unsafe-cors = true/}' \
-        --expression '/^\[api]/,/^\[/{s/^swagger[[:space:]]*=.*/swagger = false/}' \
-        --expression '/^\[api]/,/^\[/{s/^address[[:space:]]*=.*/address = "tcp:\/\/0.0.0.0:1317"/}' \
-        --expression '/^\[api]/,/^\[/{s/^max-open-connections[[:space:]]*=.*/max-open-connections = 1000/}' \
+        --expression '/^\[api]/,/^\[/{s|^address =.*|address = "tcp://0.0.0.0:1317"|}' \
+        --expression '/^\[api]/,/^\[/{s|^enable =.*|enable = true|}' \
+        --expression '/^\[api]/,/^\[/{s|^enabled-unsafe-cors =.*|enabled-unsafe-cors = true|}' \
+        --expression '/^\[api]/,/^\[/{s|^max-open-connections =.*|max-open-connections = 1000|}' \
+        --expression '/^\[api]/,/^\[/{s|^swagger =.*|swagger = false|}' \
+        --expression '/^\[rosetta]/,/^\[/{s|^enable =.*|enable = false|}' \
+        --expression '/^\[telemetry]/,/^\[/{s|^enabled =.*|enabled = true|}' \
+        --expression '/^\[telemetry]/,/^\[/{s|^laddr =.*|laddr = "tcp://0.0.0.0:26652"|}' \
+        --expression '/^\[telemetry]/,/^\[/{s|^prometheus-retention-time =.*|prometheus-retention-time = 60|}' \
         --expression 's|^rpc-max-body-bytes =.*|rpc-max-body-bytes = \"15000000\"|' \
         --in-place
 
     sed "$AGORIC_HOME/config/config.toml" \
-        --expression 's|^log_level|# log_level|' \
+        --expression 's|^addr_book_strict =.*|addr_book_strict = false|' \
         --expression 's|^allow_duplicate_ip =.*|allow_duplicate_ip = true|' \
-        --expression 's|^addr_book_strict = true|addr_book_strict = false|' \
+        --expression 's|^log_level|# log_level|' \
         --expression "s|^max_num_inbound_peers =.*|max_num_inbound_peers = $MAXIMUM_INBOUND_PEERS|" \
         --expression "s|^max_num_outbound_peers =.*|max_num_outbound_peers = $MAXIMUM_OUTBOUND_PEERS|" \
         --expression 's|^namespace =.*|namespace = "cometbft"|' \
         --expression 's|^prometheus = false|prometheus = true|' \
-        --expression "/^\[rpc]/,/^\[/{s|^laddr[[:space:]]*=.*|laddr = 'tcp://0.0.0.0:$RPC_PORT'|}" \
+        --expression "/^\[rpc]/,/^\[/{s|^laddr =.*|laddr = 'tcp://0.0.0.0:$RPC_PORT'|}" \
         --in-place
 }
 

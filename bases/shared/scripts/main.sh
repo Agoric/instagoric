@@ -187,7 +187,6 @@ case "$ROLE" in
         cp --force "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json"
 
         sed "$AGORIC_HOME/config/app.toml" \
-            --expression 's|\[rosetta\]\renable = true|\[rosetta\]\renable = false|' \
             --expression 's|^snapshot-interval = .*|snapshot-interval = 0|' \
             --in-place
         touch "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized"
