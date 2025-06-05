@@ -96,60 +96,74 @@ const getMetricsRequest = async () => {
 };
 
 const getNetworkConfig = async () => {
-  const svc = await getServices();
-  const file = FAKE
-    ? './resources/network_info.json'
-    : '/config/network/network_info.json';
-  const buf = await fs.readFile(file, FILE_ENCODING);
-  const ap = JSON.parse(buf);
-  ap.chainName = chainId;
-  ap.gci = `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`;
-  const primaryValidatorNodeId = await getNodeId(
-    String(process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME),
+  /**
+   * @type {Partial<{
+   *  apiAddrs: Array<string>;
+   *  chainName: string;
+   *  gci: string;
+   *  peers: Array<string>;
+   *  rpcAddrs: Array<string>;
+   *  seeds: Array<string>;
+   * }>}
+   */
+  const networkConfig = {
+    apiAddrs: [`https://${NETNAME}.api${NETDOMAIN}:443`],
+    chainName: chainId,
+    gci: `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`,
+    rpcAddrs: [`https://${NETNAME}.rpc${NETDOMAIN}:443`],
+  };
+
+  const services = await getServices();
+
+  const primaryValidatorService = services.get(
+    process.env.PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME,
   );
+  const seedService = services.get(process.env.SEED_EXTERNAL_SERVICE_NAME);
 
-  ap.peers = [
-    `${primaryValidatorNodeId}@${
-      svc.get(process.env.PRIMARY_VALIDATOR_EXTERNAL_SERVICE_NAME) ||
-      `${process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
-    }:${process.env.P2P_PORT}`,
-  ];
-
-  ap.rpcAddrs = [`https://${NETNAME}.rpc${NETDOMAIN}:443`];
-  ap.apiAddrs = [`https://${NETNAME}.api${NETDOMAIN}:443`];
-
-  if (INCLUDE_SEED === 'yes') {
-    const seedNodeId = await getNodeId(
-      String(process.env.SEED_STATEFUL_SET_NAME),
-    );
-    ap.seeds = [
-      `${seedNodeId}@${
-        svc.get(process.env.SEED_EXTERNAL_SERVICE_NAME) ||
-        `${process.env.SEED_STATEFUL_SET_NAME}.${namespace}.svc.cluster.local`
-      }:${process.env.P2P_PORT}`,
+  if (primaryValidatorService)
+    networkConfig.peers = [
+      `${await getNodeId(
+        String(process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME),
+      )}@${primaryValidatorService}:${process.env.P2P_PORT}`,
     ];
-  } else ap.seeds = [];
+  else networkConfig.peers = [];
 
-  return JSON.stringify(ap);
+  if (seedService && INCLUDE_SEED === 'yes')
+    networkConfig.seeds = [
+      `${await getNodeId(
+        String(process.env.SEED_STATEFUL_SET_NAME),
+      )}@${seedService}:${process.env.P2P_PORT}`,
+    ];
+  else networkConfig.seeds = [];
+
+  return JSON.stringify(networkConfig);
 };
 
 /**
  * @param {string} service_name
  */
 const getNodeId = async service_name => {
+  const endpoint = `http://${service_name}.${namespace}.svc.cluster.local:${process.env.RPC_PORT}/status`;
+  const sleep = () => new Promise(resolve => setTimeout(resolve, 5 * 1000));
+
   while (true) {
-    const response = await fetch(
-      `http://${service_name}.${namespace}.svc.cluster.local:${process.env.RPC_PORT}/status`,
-      {
+    try {
+      const response = await fetch(endpoint, {
         signal: AbortSignal.timeout(15 * 1000),
-      },
-    );
-    if (!response.ok)
-      await new Promise(resolve => setTimeout(resolve, 5 * 1000));
-    else
-      return /** @type {Promise<{result: {node_info: {id: string}}}>} */ (
-        response.json()
-      ).then(({ result }) => result.node_info.id);
+      });
+      if (!response.ok) await sleep();
+      else {
+        const json =
+          await /** @type {Promise<{result: {node_info: {id: string}}}>} */ (
+            response.json()
+          );
+        if (!json.result.node_info?.id) await sleep();
+        else return json.result.node_info?.id;
+      }
+    } catch (err) {
+      console.error(`Caught error while fetching '${endpoint}': `, err);
+      await sleep();
+    }
   }
 };
 
