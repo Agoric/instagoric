@@ -1,5 +1,5 @@
 #! /bin/bash
-# shellcheck disable=SC2119,SC2120
+# shellcheck disable=SC2119,SC2120,SC2155
 
 CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>"$VOID" && pwd)"
 
@@ -466,9 +466,36 @@ setup_a3p_snapshot_data() {
     fi
 }
 
+setup_neo4j() {
+    local config_path="/state/neo4j"
+    local slogger_path="$config_path/slogger.js"
+
+    if test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" && test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
+        if ! test -d "$config_path"; then
+            cp --recursive "$NEO4J_CONFIG_MOUNT_PATH" "$config_path"
+            yarn --cwd "$config_path" install
+            curl --fail --location --output-dir "$config_path" --remote-name --silent "$NEO4J_SLOGGER_URL"
+        fi
+
+        wait_for_url "http://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_HTTP"
+
+        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
+        export NEO4J_URI="neo4j://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_BOLT"
+        export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
+
+        if test -z "$SLOGSENDER"; then
+            export SLOGSENDER="$slogger_path"
+        else
+            export SLOGSENDER="$SLOGSENDER,$slogger_path"
+        fi
+    fi
+}
+
 start_chain() {
     local log_file="$1"
     shift
+
+    setup_neo4j
 
     (
         cd "$SDK_ROOT_PATH" || exit
@@ -613,6 +640,28 @@ wait_for_pod() {
 
         sleep 10
     done
+}
+
+wait_for_url() {
+    local url="$1"
+    local status_code
+
+    echo "Waiting for url '$url' to respond"
+
+    while true; do
+        curl "$url" --max-time "5" --silent >"$VOID" 2>&1
+        status_code="$?"
+
+        echo "URL '$url' responded with '$status_code'"
+
+        if ! test "$status_code" -eq "0"; then
+            sleep 5
+        else
+            break
+        fi
+    done
+
+    echo "URL '$url' is up"
 }
 
 wait_till_syncup_and_fund() {
