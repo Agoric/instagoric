@@ -468,14 +468,29 @@ setup_a3p_snapshot_data() {
 
 setup_neo4j() {
     local config_path="/state/neo4j"
-    local slogger_path="$config_path/slogger.js"
+    local slogger_path="scripts/slogger.js"
+
+    local file_paths=(
+        ".yarn/patches/agoric-telemetry.patch"
+        ".yarn/patches/mermaid.patch"
+        "$slogger_path"
+        ".yarnrc.yml"
+        "package.json"
+        "yarn.lock"
+    )
+    local slogger_file_path="$config_path/$slogger_path"
 
     if test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" && test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
-        if ! test -d "$config_path"; then
-            cp --recursive "$NEO4J_CONFIG_MOUNT_PATH" "$config_path"
-            yarn --cwd "$config_path" install
-            curl --fail --location --output-dir "$config_path" --remote-name --silent "$NEO4J_SLOGGER_URL"
-        fi
+        for path in "${file_paths[@]}"; do
+            mkdir --parents "$config_path/$(dirname "$path")"
+            curl --fail --location --output "$config_path/$path" --silent "$NEO4J_SOURCE_URL/$path"
+        done
+
+        cp --recursive "$NEO4J_CONFIG_MOUNT_PATH" "$config_path"
+
+        cd "$config_path" || return 1
+        corepack enable
+        yarn install
 
         wait_for_url "http://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_HTTP"
 
@@ -484,9 +499,9 @@ setup_neo4j() {
         export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
 
         if test -z "$SLOGSENDER"; then
-            export SLOGSENDER="$slogger_path"
+            export SLOGSENDER="$slogger_file_path"
         else
-            export SLOGSENDER="$SLOGSENDER,$slogger_path"
+            export SLOGSENDER="$SLOGSENDER,$slogger_file_path"
         fi
     fi
 }
