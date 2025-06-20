@@ -33,6 +33,8 @@ const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 const FILE_ENCODING = 'utf8';
+/** @type {string} */
+let FAUCET_ADDRESS;
 const FAUCET_KEYNAME =
   process.env.FAUCET_KEYNAME ||
   process.env.WHALE_KEYNAME ||
@@ -471,16 +473,32 @@ const constructAmountToSend = (amount, denoms) =>
   denoms.map(denom => `${amount}${denom}`).join(',');
 
 const getDenoms = async () => {
+  if (!FAUCET_ADDRESS) {
+    const { stdout } = await $`\
+      agd keys show "${FAUCET_KEYNAME}" \
+      --address \
+      --home "${agoricHome}" \
+      --keyring-backend "test" \
+    `;
+    FAUCET_ADDRESS = stdout.trim();
+  }
+
   // Not handling pagination as it is used for testing. Limit 100 shoud suffice
-  const result = await $`agd query bank total --limit 100 --output json`;
+  const { stdout } = await $`\
+    agd query bank balances "${FAUCET_ADDRESS}" \
+    --home "${agoricHome}" \
+    --limit "100" \
+    --output "json"\
+  `;
+
   /**
    * @type {{
-   *  supply: Array<{amount: string; denom: string}>;
+   *  balances: Array<{amount: string; denom: string}>;
    *  pagination: { next_key: string; total: string; }
    * }}
    */
-  const output = JSON.parse(result.stdout.trim());
-  return output.supply.map(({ denom }) => denom);
+  const output = JSON.parse(stdout.trim());
+  return output.balances.map(({ denom }) => denom);
 };
 
 /**
