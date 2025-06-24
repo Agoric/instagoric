@@ -154,6 +154,14 @@ ensure_balance() {
     done
 }
 
+export_neo4j_env() {
+    if test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
+        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
+        export NEO4J_URI="neo4j://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_BOLT"
+        export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
+    fi
+}
+
 fork_setup() {
     local first_fork_ip=""
     local fork_name="$1"
@@ -494,16 +502,14 @@ setup_neo4j() {
 
         wait_for_url "http://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_HTTP"
 
-        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
-        export NEO4J_URI="neo4j://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_BOLT"
-        export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
-
         if test -z "$SLOGSENDER"; then
             export SLOGSENDER="$slogger_file_path"
         else
             export SLOGSENDER="$SLOGSENDER,$slogger_file_path"
         fi
     fi
+
+    export_neo4j_env
 }
 
 start_chain() {
@@ -524,6 +530,8 @@ start_chain() {
 start_helper() {
     local log_file="$1"
     local server_directory="/usr/src/instagoric-server"
+
+    export_neo4j_env
 
     rm --force --recursive "$server_directory"
     mkdir --parents "$server_directory" || exit
