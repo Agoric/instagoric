@@ -1,4 +1,5 @@
 // @ts-check
+
 import './lockdown.js';
 
 import express from 'express';
@@ -8,6 +9,11 @@ import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
+
+import { faucetapp, privateapp, publicapp } from './app.js';
+
+// register routes
+import './causeway.js';
 
 const { details: X } = assert;
 
@@ -255,35 +261,6 @@ class DataCache {
 const ipsCache = new DataCache(getServices, 0.1);
 const networkConfig = new DataCache(getNetworkConfig, 0.5);
 const metricsCache = new DataCache(getMetricsRequest, 0.1);
-
-const publicapp = express();
-const privateapp = express();
-const faucetapp = express();
-const publicport = 8001;
-const privateport = 8002;
-const faucetport = 8003;
-
-const logReq = (req, res, next) => {
-  const time = Date.now();
-  res.on('finish', () => {
-    console.log(
-      JSON.stringify({
-        time,
-        dur: Date.now() - time,
-        method: req.method,
-        forwarded: req.get('X-Forwarded-For'),
-        ip: req.ip,
-        url: req.originalUrl,
-        status: res.statusCode,
-      }),
-    );
-  });
-  next();
-};
-
-publicapp.use(logReq);
-privateapp.use(logReq);
-faucetapp.use(logReq);
 
 publicapp.get('/', (_, res) => {
   const domain = NETDOMAIN;
@@ -542,10 +519,10 @@ const pollForProvisioning = async (address, clientType, txHash) => {
   status === TRANSACTION_STATUS.NOT_FOUND
     ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
     : status === TRANSACTION_STATUS.SUCCESSFUL
-    ? await provisionAddress(address, clientType)
-    : console.log(
-        `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
-      );
+      ? await provisionAddress(address, clientType)
+      : console.log(
+          `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
+        );
 };
 
 /**
@@ -869,15 +846,3 @@ else {
   );
   dockerImage = statefulSet.spec.template.spec.containers[0].image;
 }
-
-faucetapp.listen(faucetport, () =>
-  console.log(`faucetapp listening on port ${faucetport}`),
-);
-
-privateapp.listen(privateport, () =>
-  console.log(`privateapp listening on port ${privateport}`),
-);
-
-publicapp.listen(publicport, () =>
-  console.log(`publicapp listening on port ${publicport}`),
-);
