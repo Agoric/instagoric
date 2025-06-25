@@ -1,5 +1,5 @@
 #! /bin/bash
-# shellcheck disable=SC2119,SC2120,SC2155
+# shellcheck disable=SC2119,SC2120,SC2155,SC2235
 
 CURRENT_DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>"$VOID" && pwd)"
 
@@ -488,7 +488,11 @@ setup_neo4j() {
     )
     local slogger_file_path="$config_path/$slogger_path"
 
-    if test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME" && test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
+    if (
+        test "$ROLE" == "$FOLLOWER_STATEFUL_SET_NAME" ||
+            test "$ROLE" == "$FIRST_FORK_STATEFUL_SET_NAME" ||
+            test "$ROLE" == "$PRIMARY_VALIDATOR_STATEFUL_SET_NAME"
+    ) && test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
         for path in "${file_paths[@]}"; do
             mkdir --parents "$config_path/$(dirname "$path")"
             curl --fail --location --output "$config_path/$path" --silent "$NEO4J_SOURCE_URL/$path"
