@@ -14,7 +14,9 @@ publicapp.get('/causeway/interactions', async (request, response) => {
       const currentPage = Number(searchParams.currentPage) || 0;
       const endTime = /** @type {string} */ (searchParams.endTime);
       const limit = Number(searchParams.limit) || 20;
-      const runId = /** @type {string} */ (searchParams.runId);
+      const runIds = /** @type {string} */ (searchParams.runIds || '')
+        .split(',')
+        .filter(Boolean);
       const startTime = /** @type {string} */ (searchParams.startTime);
       const vatIds = /** @type {string} */ (searchParams.vats || '')
         .split(',')
@@ -31,8 +33,10 @@ publicapp.get('/causeway/interactions', async (request, response) => {
         [
           blockHeight && `${sourceNodeName}.blockHeight = $blockHeight`,
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
-          runId && `${sourceNodeName}.runID = ${targetNodeName}.runID`,
-          runId && `${sourceNodeName}.runID = $runId`,
+          !!runIds.length &&
+            `${sourceNodeName}.runID = ${targetNodeName}.runID`,
+          !!runIds.length &&
+            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
           !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
           !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
@@ -91,7 +95,6 @@ publicapp.get('/causeway/interactions', async (request, response) => {
       const result = await session.run(query, {
         blockHeight: Number(blockHeight),
         endTime: endTimestamp,
-        runId,
         startTime: startTimestamp,
       });
 
@@ -129,7 +132,9 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
       const searchParams = request.query;
       const blockHeight = /** @type {string} */ (searchParams.blockHeight);
       const endTime = /** @type {string} */ (searchParams.endTime);
-      const runId = /** @type {string} */ (searchParams.runId);
+      const runIds = /** @type {string} */ (searchParams.runIds || '')
+        .split(',')
+        .filter(Boolean);
       const startTime = /** @type {string} */ (searchParams.startTime);
       const vatIds = /** @type {string} */ (searchParams.vats || '')
         .split(',')
@@ -146,8 +151,10 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
         [
           blockHeight && `${sourceNodeName}.blockHeight = $blockHeight`,
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
-          runId && `${sourceNodeName}.runID = ${targetNodeName}.runID`,
-          runId && `${sourceNodeName}.runID = $runId`,
+          !!runIds.length &&
+            `${sourceNodeName}.runID = ${targetNodeName}.runID`,
+          !!runIds.length &&
+            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
           !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
           !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
@@ -180,7 +187,6 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
           await session.run(countQuery, {
             blockHeight: Number(blockHeight),
             endTime: endTimestamp,
-            runId,
             startTime: startTimestamp,
           })
         );
@@ -202,6 +208,60 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
   }
 });
 
+publicapp.get('/causeway/run-ids', async (request, response) => {
+  if (!driver) response.send('No driver instance found for neo4j').status(500);
+  else {
+    const session = driver.session();
+
+    try {
+      const searchParams = request.query;
+      const blockHeight = /** @type {string} */ (searchParams.blockHeight);
+      const endTime = /** @type {string} */ (searchParams.endTime);
+      const startTime = /** @type {string} */ (searchParams.startTime);
+
+      const endTimestamp = parseFloat(endTime) || Math.floor(Date.now() / 1000);
+      const startTimestamp = parseFloat(startTime) || 0;
+
+      const filters = [
+        blockHeight && 'event.blockHeight = $blockHeight',
+        endTimestamp && 'event.time <= $endTime',
+        startTimestamp && 'event.time >= $startTime',
+      ]
+        .filter(Boolean)
+        .join(' AND ');
+
+      const result =
+        /** @type {import('neo4j-driver').QueryResult<{ runID: string }>} */ (
+          await session.run(
+            `
+              MATCH (event)
+              WHERE (event:Message OR event:Notify) AND ${filters}
+              MATCH (event)-[:CALL]->(:Vat)
+              WITH collect(event) AS events
+              UNWIND events AS event
+              WITH DISTINCT event.runID AS runID
+              WHERE runID IS NOT NULL
+              RETURN runID
+
+            `,
+            {
+              blockHeight: Number(blockHeight),
+              endTime: endTimestamp,
+              startTime: startTimestamp,
+            },
+          )
+        );
+      const uniqueRunIds = result.records.map(record => record.get('runID'));
+      response.send(uniqueRunIds).status(200);
+    } catch (error) {
+      console.error('Error fetching vats:', error);
+      response.send('Failed to fetch vats').status(500);
+    } finally {
+      await session.close();
+    }
+  }
+});
+
 publicapp.get('/causeway/vats', async (request, response) => {
   if (!driver) response.send('No driver instance found for neo4j').status(500);
   else {
@@ -211,7 +271,9 @@ publicapp.get('/causeway/vats', async (request, response) => {
       const searchParams = request.query;
       const blockHeight = /** @type {string} */ (searchParams.blockHeight);
       const endTime = /** @type {string} */ (searchParams.endTime);
-      const runId = /** @type {string} */ (searchParams.runId);
+      const runIds = /** @type {string} */ (searchParams.runIds || '')
+        .split(',')
+        .filter(Boolean);
       const startTime = /** @type {string} */ (searchParams.startTime);
       const vatIds = /** @type {string} */ (searchParams.vats || '')
         .split(',')
@@ -223,7 +285,7 @@ publicapp.get('/causeway/vats', async (request, response) => {
       const filters = [
         blockHeight && 'event.blockHeight = $blockHeight',
         endTimestamp && 'event.time <= $endTime',
-        runId && 'event.runID = $runId',
+        !!runIds.length && `event.runID IN ["${runIds.join('", "')}"]`,
         startTimestamp && 'event.time >= $startTime',
       ]
         .filter(Boolean)
@@ -248,7 +310,6 @@ publicapp.get('/causeway/vats', async (request, response) => {
             {
               blockHeight: Number(blockHeight),
               endTime: endTimestamp,
-              runId,
               startTime: startTimestamp,
             },
           )
