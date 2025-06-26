@@ -16,6 +16,9 @@ publicapp.get('/causeway/interactions', async (request, response) => {
       const limit = Number(searchParams.limit) || 20;
       const runId = /** @type {string} */ (searchParams.runId);
       const startTime = /** @type {string} */ (searchParams.startTime);
+      const vatIds = /** @type {string} */ (searchParams.vats || '')
+        .split(',')
+        .filter(Boolean);
 
       const startTimestamp = parseFloat(startTime) || 0;
       const endTimestamp = parseFloat(endTime) || Math.floor(Date.now() / 1000);
@@ -31,12 +34,14 @@ publicapp.get('/causeway/interactions', async (request, response) => {
           runId && `${sourceNodeName}.runID = ${targetNodeName}.runID`,
           runId && `${sourceNodeName}.runID = $runId`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
+          !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
+          !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
         ]
           .filter(Boolean)
           .join(' AND ');
 
       const query = `
-          CALL {
+          CALL() {
             MATCH
               (message:Message)-[:CALL]->(target:Vat),
               (source:Vat)-[:SYSCALL]->(syscall:Syscall)
@@ -126,6 +131,9 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
       const endTime = /** @type {string} */ (searchParams.endTime);
       const runId = /** @type {string} */ (searchParams.runId);
       const startTime = /** @type {string} */ (searchParams.startTime);
+      const vatIds = /** @type {string} */ (searchParams.vats || '')
+        .split(',')
+        .filter(Boolean);
 
       const startTimestamp = parseFloat(startTime) || 0;
       const endTimestamp = parseFloat(endTime) || Math.floor(Date.now() / 1000);
@@ -141,12 +149,14 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
           runId && `${sourceNodeName}.runID = ${targetNodeName}.runID`,
           runId && `${sourceNodeName}.runID = $runId`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
+          !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
+          !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
         ]
           .filter(Boolean)
           .join(' AND ');
 
       const countQuery = `
-          CALL {
+          CALL() {
             MATCH
               (message:Message)-[:CALL]->(target:Vat),
               (source:Vat)-[:SYSCALL]->(syscall:Syscall)
@@ -154,7 +164,7 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
               message.result = syscall.result AND ${createFilters('message', 'syscall')}
             RETURN count(*) AS messageCount
           }
-          CALL {
+          CALL() {
             MATCH
               (notify:Notify)-[:CALL]->(target:Vat),
               (source:Vat)-[:RESOLVE]->(resolve:Resolve)
@@ -203,6 +213,9 @@ publicapp.get('/causeway/vats', async (request, response) => {
       const endTime = /** @type {string} */ (searchParams.endTime);
       const runId = /** @type {string} */ (searchParams.runId);
       const startTime = /** @type {string} */ (searchParams.startTime);
+      const vatIds = /** @type {string} */ (searchParams.vats || '')
+        .split(',')
+        .filter(Boolean);
 
       const endTimestamp = parseFloat(endTime) || Math.floor(Date.now() / 1000);
       const startTimestamp = parseFloat(startTime) || 0;
@@ -226,7 +239,7 @@ publicapp.get('/causeway/vats', async (request, response) => {
               WITH collect(target) AS vatNodes
               UNWIND vatNodes AS v
               WITH DISTINCT v
-              WHERE v IS NOT NULL
+              WHERE v IS NOT NULL ${vatIds.length ? `AND v.vatID IN ["${vatIds.join('", "')}"]` : ''}
               RETURN
                 v.vatID   AS vatID,
                 v.name    AS vatName
