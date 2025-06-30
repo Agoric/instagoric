@@ -265,6 +265,64 @@ publicapp.get('/causeway/run-ids', async (request, response) => {
   }
 });
 
+publicapp.get(
+  '/causeway/transaction/:transactionId/run-id',
+  async (request, response) => {
+    if (!driver)
+      response.send('No driver instance found for neo4j').status(500);
+    else {
+      const session = driver.session();
+      const transactionId = request.params.transactionId;
+
+      try {
+        const triggerSource = /** @type {string} */ (request.query.source);
+
+        const filters = [
+          triggerSource && 'run.triggerSource = $source',
+          'run.triggerTxHash = $transactionId',
+          'run.triggerType = "bridge"',
+        ]
+          .filter(Boolean)
+          .join(' AND ');
+
+        const result =
+          /** @type {import('neo4j-driver').QueryResult<{ runID: string }>} */ (
+            await session.run(
+              `
+              MATCH (run:Run)
+              WHERE ${filters}
+              RETURN DISTINCT run.id AS runID;
+            `,
+              {
+                transactionId,
+                source: triggerSource,
+              },
+            )
+          );
+
+        if (!result.records.length)
+          response
+            .send(`No run found for transaction "${transactionId}"`)
+            .status(404);
+        else
+          response
+            .send(result.records.map(record => record.get('runID')))
+            .status(200);
+      } catch (error) {
+        console.error(
+          `Error fetching run ID for transaction "${transactionId}": `,
+          error,
+        );
+        response
+          .send(`Failed to fetch run ID for transaction "${transactionId}"`)
+          .status(500);
+      } finally {
+        await session.close();
+      }
+    }
+  },
+);
+
 publicapp.get('/causeway/vats', async (request, response) => {
   if (!driver) response.send('No driver instance found for neo4j').status(500);
   else {
