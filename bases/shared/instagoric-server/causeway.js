@@ -211,6 +211,93 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
   }
 });
 
+publicapp.get('/causeway/run', async (request, response) => {
+  if (!driver) response.send('No driver instance found for neo4j').status(500);
+  else {
+    const session = driver.session();
+
+    try {
+      const searchParams = request.query;
+
+      const blockHeight = /** @type {string} */ (searchParams.blockHeight);
+      const currentPage = Number(searchParams.currentPage) || 0;
+      const endTime = /** @type {string} */ (searchParams.endTime);
+      const id = /** @type {string} */ (searchParams.id);
+      const limit = Number(searchParams.limit);
+      const proposalId = /** @type {string} */ (searchParams.proposalId);
+      const startTime = /** @type {string} */ (searchParams.startTime);
+
+      const endTimestamp = parseFloat(endTime) || Math.floor(Date.now() / 1000);
+      const startTimestamp = parseFloat(startTime) || 0;
+
+      const filters = [
+        blockHeight && 'run.blockHeight = $blockHeight',
+        endTimestamp && 'run.time <= $endTime',
+        id && 'run.id = $id',
+        proposalId && 'run.proposalID = $proposalId',
+        startTimestamp && 'run.time >= $startTime',
+      ]
+        .filter(Boolean)
+        .join(' AND ');
+
+      const result = /**
+       * @type {import('neo4j-driver').QueryResult<{
+       *  blockHeight: number;
+       *  blockTime: number;
+       *  computrons: number;
+       *  id: string;
+       *  number: string;
+       *  proposalId: string;
+       *  time: number
+       *  triggerBundleHash: string;
+       *  triggerMsgIdx: number;
+       *  triggerSender: string;
+       *  triggerSource: string;
+       *  triggerTxHash: string;
+       *  triggerType: string;
+       * }>}
+       */ (
+        await session.run(
+          `
+            MATCH (run:Run)
+            ${filters.length ? ` WHERE ${filters}` : ''}
+            RETURN
+              run.blockHeight           AS blockHeight,
+              run.blockTime             AS blockTime,
+              run.computrons            AS computrons,
+              run.id                    AS id,
+              run.number                AS number,
+              run.proposalID            AS proposalId,
+              run.time                  AS time,
+              run.triggerBundleHash     AS triggerBundleHash,
+              run.triggerMsgIdx         AS triggerMsgIdx,
+              run.triggerSender         AS triggerSender,
+              run.triggerSource         AS triggerSource,
+              run.triggerTxHash         AS triggerTxHash,
+              run.triggerType           AS triggerType
+            OFFSET ${currentPage * (limit || 1)}
+            ${limit ? ` LIMIT ${limit}` : ''};
+          `,
+          {
+            blockHeight: Number(blockHeight),
+            endTime: endTimestamp,
+            id,
+            proposalId,
+            startTime: startTimestamp,
+          },
+        )
+      );
+      const runs = result.records.map(record => record.toObject());
+      response.send(runs).status(200);
+    } catch (error) {
+      console.error('Error fetching runs:', error);
+      response.send('Failed to fetch runs').status(500);
+    } finally {
+      await session.close();
+    }
+  }
+});
+
 publicapp.get('/causeway/run-ids', async (request, response) => {
   if (!driver) response.send('No driver instance found for neo4j').status(500);
   else {
