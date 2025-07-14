@@ -17,9 +17,12 @@ configMapGenerator:
       - entrypoint.sh
   - name: server
     files:
+      - instagoric-server/app.js
+      - instagoric-server/causeway.js
       - instagoric-server/lockdown.js
-      - instagoric-server/server.js
+      - instagoric-server/neo4j.js
       - instagoric-server/package.json
+      - instagoric-server/server.js
       - instagoric-server/yarn.lock
   - name: store-stats
     files:
