@@ -3,6 +3,16 @@
 import { publicapp } from './app.js';
 import driver from './neo4j.js';
 
+const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
+
+const STATEFUL_SET_MAP = {
+  devnet: process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME,
+  emerynet: process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME,
+  followmain: process.env.FOLLOWER_STATEFUL_SET_NAME,
+  ollinet: process.env.FIRST_FORK_STATEFUL_SET_NAME,
+  xnet: process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME,
+};
+
 publicapp.get('/causeway/interactions', async (request, response) => {
   if (!driver) response.send('No driver instance found for neo4j').status(500);
   else {
@@ -289,6 +299,99 @@ publicapp.get('/causeway/run', async (request, response) => {
       );
       const runs = result.records.map(record => record.toObject());
       response.send(runs).status(200);
+    } catch (error) {
+      console.error('Error fetching runs:', error);
+      response.send('Failed to fetch runs').status(500);
+    } finally {
+      await session.close();
+    }
+  }
+});
+
+publicapp.get('/causeway/run/logs', async (request, response) => {
+  if (!driver) response.send('No driver instance found for neo4j').status(500);
+  else {
+    const session = driver.session();
+
+    try {
+      const searchParams = request.query;
+
+      const runId = /** @type {string} */ (searchParams.runId);
+
+      /**
+       * @param {number} timestamp
+       */
+      const parseTimestamp = timestamp =>
+        new Date(timestamp * 1000).toISOString();
+
+      const result = /**
+       * @type {import('neo4j-driver').QueryResult<{
+       *  firstInteractionTime: number;
+       *  lastInteractionTime: number;
+       * }>}
+       */ (
+        await session.run(
+          `
+            CALL() {
+              MATCH
+                (message:Message)-[:CALL]->(target:Vat),
+                (source:Vat)-[:SYSCALL]->(syscall:Syscall)
+              WHERE
+                message.result = syscall.result
+                AND message.runID = $runId
+              RETURN
+                message.time AS time
+
+                UNION ALL
+
+              MATCH
+                (notify:Notify)-[:CALL]->(target:Vat),
+                (source:Vat)-[:RESOLVE]->(resolve:Resolve)
+              WHERE
+                notify.kpid = resolve.result
+                AND notify.runID = $runId
+              RETURN
+                notify.time AS time
+            }
+            RETURN
+              min(time) AS firstInteractionTime,
+              max(time) AS lastInteractionTime;
+          `,
+          { runId },
+        )
+      );
+
+      if (result.records.length !== 1)
+        throw Error(
+          `Expected 1 record, got ${result.records.length} record(s)`,
+        );
+
+      const { firstInteractionTime, lastInteractionTime } =
+        result.records[0].toObject();
+
+      const logsQuery = {
+        '62l': {
+          datasource: 'P470A85C5170C7A1D',
+          queries: [
+            {
+              queryText: [
+                `jsonPayload.attributes."run.id"="${runId}"`,
+                `resource.labels.container_name="log-slog"`,
+                `resource.labels.namespace_name="${process.env.NAMESPACE}"`,
+                `resource.labels.pod_name="${STATEFUL_SET_MAP[process.env.NAMESPACE]}-0"`,
+              ].join(' AND '),
+            },
+          ],
+          range: {
+            from: parseTimestamp(firstInteractionTime),
+            to: parseTimestamp(lastInteractionTime),
+          },
+        },
+      };
+
+      response.redirect(
+        `https://monitor${NETDOMAIN}/explore?orgId=1&panes=${encodeURIComponent(JSON.stringify(logsQuery))}&schemaVersion=1`,
+      );
     } catch (error) {
       console.error('Error fetching runs:', error);
       response.send('Failed to fetch runs').status(500);
