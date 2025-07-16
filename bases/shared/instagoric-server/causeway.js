@@ -334,22 +334,18 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
           `
             CALL() {
               MATCH
-                (message:Message)-[:CALL]->(target:Vat),
-                (source:Vat)-[:SYSCALL]->(syscall:Syscall)
+                (:Vat)-[:SYSCALL]->(syscall:Syscall)
               WHERE
-                message.result = syscall.result
-                AND message.runID = $runId
+                syscall.runID = $runId
               RETURN
-                message.time AS time
+                syscall.time AS time
 
                 UNION ALL
 
               MATCH
-                (notify:Notify)-[:CALL]->(target:Vat),
-                (source:Vat)-[:RESOLVE]->(resolve:Resolve)
+                (notify:Notify)-[:CALL]->(:Vat)
               WHERE
-                notify.kpid = resolve.result
-                AND notify.runID = $runId
+                notify.runID = $runId
               RETURN
                 notify.time AS time
             }
