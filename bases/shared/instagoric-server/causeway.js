@@ -3,7 +3,9 @@
 import { publicapp } from './app.js';
 import driver from './neo4j.js';
 
+const CLUSTER_NAME = 'instagoric';
 const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
+const SLOGS_CONTAINER_NAME = 'log-slog';
 
 const STATEFUL_SET_MAP = {
   devnet: process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME,
@@ -312,6 +314,7 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
   if (!driver) response.send('No driver instance found for neo4j').status(500);
   else {
     const session = driver.session();
+    const timeOffset = 10;
 
     try {
       const searchParams = request.query;
@@ -319,10 +322,11 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
       const runId = /** @type {string} */ (searchParams.runId);
 
       /**
+       * @param {number} secondsOffset
        * @param {number} timestamp
        */
-      const parseTimestamp = timestamp =>
-        new Date(timestamp * 1000).toISOString();
+      const parseTimestamp = (secondsOffset, timestamp) =>
+        new Date((timestamp + secondsOffset) * 1000).toISOString();
 
       const result = /**
        * @type {import('neo4j-driver').QueryResult<{
@@ -372,15 +376,16 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
             {
               queryText: [
                 `jsonPayload.attributes."run.id"="${runId}"`,
-                `resource.labels.container_name="log-slog"`,
+                `resource.labels.cluster_name="${CLUSTER_NAME}"`,
+                `resource.labels.container_name="${SLOGS_CONTAINER_NAME}"`,
                 `resource.labels.namespace_name="${process.env.NAMESPACE}"`,
                 `resource.labels.pod_name="${STATEFUL_SET_MAP[process.env.NAMESPACE]}-0"`,
               ].join(' AND '),
             },
           ],
           range: {
-            from: parseTimestamp(firstInteractionTime),
-            to: parseTimestamp(lastInteractionTime),
+            from: parseTimestamp(-timeOffset, firstInteractionTime),
+            to: parseTimestamp(timeOffset, lastInteractionTime),
           },
         },
       };
