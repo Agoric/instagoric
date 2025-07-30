@@ -225,7 +225,7 @@ get_node_id_from_cluster_service() {
     while true; do
         node_info="$(get_node_info "http://$service_name.$NAMESPACE.svc.cluster.local:$RPC_PORT")"
         if test -n "$node_info"; then
-            echo "$node_info" | jq '.NodeInfo.id' --raw-output
+            echo "$node_info" | jq '.node_info.id' --raw-output
             break
         fi
         sleep 5
@@ -319,7 +319,7 @@ hang() {
 }
 
 has_node_caught_up() {
-    test "$(get_node_info | jq --raw-output '.SyncInfo.catching_up')" == "false"
+    test "$(get_node_info | jq --raw-output '.sync_info.catching_up')" == "false"
 }
 
 initialize_new_chain() {
