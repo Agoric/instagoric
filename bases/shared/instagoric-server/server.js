@@ -464,7 +464,7 @@ const getDenoms = async () => {
   const { stdout } = await $`\
     agd query bank balances "${FAUCET_ADDRESS}" \
     --home "${agoricHome}" \
-    --limit "100" \
+    --page-limit 100 \
     --output "json"\
   `;
 
