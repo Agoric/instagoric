@@ -40,7 +40,6 @@ auto_approve() {
         while true; do
             proposals="$(
                 agd query gov proposals \
-                    --chain-id "$CHAIN_ID" \
                     --home "$AGORIC_HOME" \
                     --output "json" \
                     --status "VotingPeriod" 2>"$VOID"
@@ -52,7 +51,6 @@ auto_approve() {
                 for proposal_id in $proposal_ids; do
                     votes="$(
                         agd query gov votes "$proposal_id" \
-                            --chain-id "$CHAIN_ID" \
                             --home "$AGORIC_HOME" \
                             --output json 2>"$VOID"
                     )"

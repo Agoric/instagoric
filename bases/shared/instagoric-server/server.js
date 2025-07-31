@@ -487,7 +487,6 @@ const getDenoms = async () => {
 const getTransactionStatus = async txHash => {
   let { exitCode, stderr, stdout } = await nothrow($`\
     agd query tx ${txHash} \
-    --chain-id=${chainId} \
     --home=${agoricHome} \
     --node=http://localhost:${RPC_PORT} \
     --output=json \
