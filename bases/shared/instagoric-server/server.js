@@ -11,51 +11,41 @@ import { $, fetch, fs, nothrow, sleep } from 'zx';
 import { makeSubscriptionKit } from '@agoric/notifier';
 
 import { faucetapp, privateapp, publicapp } from './app.js';
+import {
+  AGORIC_HOME,
+  BASE_AMOUNT,
+  CHAIN_ID,
+  COMMANDS,
+  DELEGATE_AMOUNT,
+  FAUCET_KEYNAME,
+  RPC_PORT,
+  TRANSACTION_STATUS,
+} from './constants.js';
+import {
+  getFaucetAccountBalances,
+  getTransactionStatus,
+  sendFunds,
+} from './util.js';
 
 // register routes
 import './causeway.js';
+import './faucet.js';
 
 const { details: X } = assert;
 
-const BASE_AMOUNT = 25000000;
-// Adding here to avoid ReferenceError for local server. Not needed for k8
 let CLUSTER_NAME;
 
 const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || `${BASE_AMOUNT}ibc/toyusdc`;
-const DELEGATE_AMOUNT =
-  process.env.DELEGATE_AMOUNT ||
-  `${BASE_AMOUNT * 3}${
-    process.env.BLD_DENOM
-  },${BASE_AMOUNT}ibc/toyatom,${BASE_AMOUNT}ibc/toyellie,${BASE_AMOUNT}ibc/toyusdc,${BASE_AMOUNT}ibc/toyollie`;
-
-const COMMANDS = {
-  'SEND_BLD/IBC': 'send_bld_ibc',
-  SEND_AND_PROVISION_IST: 'send_ist_and_provision',
-  FUND_PROV_POOL: 'fund_provision_pool',
-  CUSTOM_DENOMS_LIST: 'custom_denoms_list',
-};
 
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
 const FILE_ENCODING = 'utf8';
-/** @type {string} */
-let FAUCET_ADDRESS;
-const FAUCET_KEYNAME =
-  process.env.FAUCET_KEYNAME ||
-  process.env.WHALE_KEYNAME ||
-  process.env.SELF_KEYNAME;
 const INCLUDE_SEED = process.env.SEED_ENABLE || 'yes';
 const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const NETNAME = process.env.NETNAME || 'devnet';
 const podname =
   process.env.POD_NAME || process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME;
-const RPC_PORT = Number(process.env.RPC_PORT);
-const TRANSACTION_STATUS = {
-  FAILED: 1000,
-  NOT_FOUND: 1001,
-  SUCCESSFUL: 1002,
-};
 
 if (FAKE) {
   console.log('FAKE MODE');
@@ -67,14 +57,11 @@ if (FAKE) {
   // Create the temporary key.
   console.log(`Creating temporary key`, { tmpDir, FAUCET_KEYNAME });
   await $`agd --home=${tmpDir} keys --keyring-backend=test add ${FAUCET_KEYNAME}`;
-  if (!process.env.AGORIC_HOME) process.env.AGORIC_HOME = tmpDir;
+  if (!AGORIC_HOME) process.env.AGORIC_HOME = tmpDir;
 }
 
-const agoricHome = process.env.AGORIC_HOME;
-assert(agoricHome, X`AGORIC_HOME not set`);
-
-const chainId = process.env.CHAIN_ID;
-assert(chainId, X`CHAIN_ID not set`);
+assert(AGORIC_HOME, X`AGORIC_HOME not set`);
+assert(CHAIN_ID, X`CHAIN_ID not set`);
 
 let dockerImage;
 
@@ -116,7 +103,7 @@ const getNetworkConfig = async () => {
    */
   const networkConfig = {
     apiAddrs: [`https://${NETNAME}.api${NETDOMAIN}:443`],
-    chainName: chainId,
+    chainName: CHAIN_ID,
     gci: `https://${NETNAME}.rpc${NETDOMAIN}:443/genesis`,
     rpcAddrs: [`https://${NETNAME}.rpc${NETDOMAIN}:443`],
   };
@@ -279,7 +266,7 @@ publicapp.get('/', (_, res) => {
   const logsUrl = `https://monitor${domain}/explore?schemaVersion=1&panes=${encodeURI(
     JSON.stringify(logsQuery),
   )}&orgId=1`;
-  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8g/agoric-chain-metrics-bare-metal?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${chainId}&orgId=1`;
+  const dashboardUrl = `https://monitor${domain}/d/cdzujrg5sxvy8g/agoric-chain-metrics-bare-metal?var-cluster=${CLUSTER_NAME}&var-namespace=${namespace}&var-chain_id=${CHAIN_ID}&orgId=1`;
   res.send(`
 <html><head><title>Instagoric</title></head><body><pre>
 ██╗███╗   ██╗███████╗████████╗ █████╗  ██████╗  ██████╗ ██████╗ ██╗ ██████╗
@@ -289,7 +276,7 @@ publicapp.get('/', (_, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${chainId}${
+Chain: ${CHAIN_ID}${
     process.env.NETPURPOSE !== undefined
       ? `\nPurpose: ${process.env.NETPURPOSE}`
       : ''
@@ -449,65 +436,6 @@ const addRequest = (address, request) => {
 const constructAmountToSend = (amount, denoms) =>
   denoms.map(denom => `${amount}${denom}`).join(',');
 
-const getDenoms = async () => {
-  if (!FAUCET_ADDRESS) {
-    const { stdout } = await $`\
-      agd keys show "${FAUCET_KEYNAME}" \
-      --address \
-      --home "${agoricHome}" \
-      --keyring-backend "test" \
-    `;
-    FAUCET_ADDRESS = stdout.trim();
-  }
-
-  // Not handling pagination as it is used for testing. Limit 100 shoud suffice
-  const { stdout } = await $`\
-    agd query bank balances "${FAUCET_ADDRESS}" \
-    --home "${agoricHome}" \
-    --limit "100" \
-    --output "json"\
-  `;
-
-  /**
-   * @type {{
-   *  balances: Array<{amount: string; denom: string}>;
-   *  pagination: { next_key: string; total: string; }
-   * }}
-   */
-  const output = JSON.parse(stdout.trim());
-  return output.balances.map(({ denom }) => denom);
-};
-
-/**
- * Returns the status of a transaction against hash `txHash`.
- * The status is one of the values from `TRANSACTION_STATUS`
- * @param {string} txHash
- * @returns {Promise<number>}
- */
-const getTransactionStatus = async txHash => {
-  let { exitCode, stderr, stdout } = await nothrow($`\
-    agd query tx ${txHash} \
-    --chain-id=${chainId} \
-    --home=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --type=hash \
-  `);
-  exitCode = exitCode ?? 1;
-
-  // This check is brittle as this can also happen in case
-  // an invalid txhash was provided. So there is no reliable
-  // distinction between the case of invalid txhash and a
-  // transaction currently in the mempool. We could use search
-  // endpoint but that seems overkill to cover a case where
-  // the only the deliberate use of invalid hash can effect the user
-  if (exitCode && stderr.includes(`tx (${txHash}) not found`))
-    return TRANSACTION_STATUS.NOT_FOUND;
-
-  const code = Number(JSON.parse(stdout).code);
-  return code ? TRANSACTION_STATUS.FAILED : TRANSACTION_STATUS.SUCCESSFUL;
-};
-
 /**
  * @param {string} address
  * @param {string} clientType
@@ -515,7 +443,7 @@ const getTransactionStatus = async txHash => {
  * @returns {Promise<void>}
  */
 const pollForProvisioning = async (address, clientType, txHash) => {
-  const status = await getTransactionStatus(txHash);
+  const [status] = await getTransactionStatus(txHash);
   status === TRANSACTION_STATUS.NOT_FOUND
     ? setTimeout(() => pollForProvisioning(address, clientType, txHash), 2000)
     : status === TRANSACTION_STATUS.SUCCESSFUL
@@ -534,10 +462,10 @@ const provisionAddress = async (address, clientType) => {
   let { exitCode, stderr } = await nothrow($`\
     agd tx swingset provision-one faucet_provision ${address} ${clientType} \
     --broadcast-mode=block \
-    --chain-id=${chainId} \
+    --chain-id=${CHAIN_ID} \
     --from=${FAUCET_KEYNAME} \
     --keyring-backend=test \
-    --keyring-dir=${agoricHome} \
+    --keyring-dir=${AGORIC_HOME} \
     --node=http://localhost:${RPC_PORT} \
     --yes \
   `);
@@ -547,35 +475,6 @@ const provisionAddress = async (address, clientType) => {
     console.log(
       `Failed to provision address "${address}" of type "${clientType}" with error message: ${stderr}`,
     );
-};
-
-/**
- * Send funds to `address`.
- * It only waits for the transaction
- * checks and doesn't wait for the
- * transaction to actually be included
- * in a block. The returned transaction
- * hash can be used to get the current status
- * of the transaction later
- * @param {string} address
- * @param {string} amount
- * @returns {Promise<[number, string]>}
- */
-const sendFunds = async (address, amount) => {
-  let { exitCode, stdout } = await nothrow($`\
-    agd tx bank send ${FAUCET_KEYNAME} ${address} ${amount} \
-    --broadcast-mode=sync \
-    --chain-id=${chainId} \
-    --keyring-backend=test \
-    --keyring-dir=${agoricHome} \
-    --node=http://localhost:${RPC_PORT} \
-    --output=json \
-    --yes \
-  `);
-  exitCode = exitCode ?? 1;
-
-  if (exitCode) return [exitCode, ''];
-  return [exitCode, String(JSON.parse(stdout).txhash)];
 };
 
 // Faucet worker.
@@ -648,10 +547,10 @@ const startFaucetWorker = async () => {
 
 startFaucetWorker();
 
-faucetapp.get('/', async (req, res) => {
-  const denoms = await getDenoms();
+faucetapp.get('/', async (_, res) => {
+  const denoms = await getFaucetAccountBalances();
   let denomHtml = '';
-  denoms.forEach(denom => {
+  denoms.forEach(({ denom }) => {
     denomHtml += `<label><input type="checkbox" name="denoms" value=${denom}> ${denom} </label>`;
   });
   const denomsDropDownHtml = `<div class="dropdown"> <div class="dropdown-content"> ${denomHtml}</div> </div>`;
@@ -774,7 +673,7 @@ faucetapp.post('/go', (req, res) => {
 
 faucetapp.get('/api/transaction-status/:txhash', async (req, res) => {
   const { txhash } = req.params;
-  const transactionStatus = await getTransactionStatus(txhash);
+  const [transactionStatus] = await getTransactionStatus(txhash);
   res.send({ transactionStatus }).status(200);
 });
 
