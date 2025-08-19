@@ -46,9 +46,9 @@ publicapp.get('/causeway/interactions', async (request, response) => {
           blockHeight && `${sourceNodeName}.blockHeight = $blockHeight`,
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
           !!runIds.length &&
-          `${sourceNodeName}.runID = ${targetNodeName}.runID`,
+            `${sourceNodeName}.runID = ${targetNodeName}.runID`,
           !!runIds.length &&
-          `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
+            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
           !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
           !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
@@ -167,9 +167,9 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
           blockHeight && `${sourceNodeName}.blockHeight = $blockHeight`,
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
           !!runIds.length &&
-          `${sourceNodeName}.runID = ${targetNodeName}.runID`,
+            `${sourceNodeName}.runID = ${targetNodeName}.runID`,
           !!runIds.length &&
-          `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
+            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
           !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
           !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
@@ -269,8 +269,8 @@ publicapp.get('/causeway/run', async (request, response) => {
        *  triggerType: string;
        * }>}
        */ (
-          await session.run(
-            `
+        await session.run(
+          `
             MATCH (run:Run)
             ${filters.length ? ` WHERE ${filters}` : ''}
             RETURN
@@ -290,15 +290,15 @@ publicapp.get('/causeway/run', async (request, response) => {
             OFFSET ${currentPage * (limit || 1)}
             ${limit ? ` LIMIT ${limit}` : ''};
           `,
-            {
-              blockHeight: Number(blockHeight),
-              endTime: endTimestamp,
-              id,
-              proposalId,
-              startTime: startTimestamp,
-            },
-          )
-        );
+          {
+            blockHeight: Number(blockHeight),
+            endTime: endTimestamp,
+            id,
+            proposalId,
+            startTime: startTimestamp,
+          },
+        )
+      );
       const runs = result.records.map(record => record.toObject());
       response.send(runs).status(200);
     } catch (error) {
@@ -334,8 +334,8 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
        *  lastInteractionTime: number;
        * }>}
        */ (
-          await session.run(
-            `
+        await session.run(
+          `
             CALL() {
               MATCH
                 (:Vat)-[:SYSCALL]->(syscall:Syscall)
@@ -357,9 +357,9 @@ publicapp.get('/causeway/run/logs', async (request, response) => {
               min(time) AS firstInteractionTime,
               max(time) AS lastInteractionTime;
           `,
-            { runId },
-          )
-        );
+          { runId },
+        )
+      );
 
       if (result.records.length !== 1)
         throw Error(
@@ -469,10 +469,11 @@ publicapp.get(
       try {
         const triggerSources = /** @type {string} */ (searchParams.source || '')
           .split(',')
-          .filter((triggerSource) => Boolean(triggerSource.trim()));
+          .filter(triggerSource => Boolean(triggerSource.trim()));
 
         const filters = [
-          !!triggerSources.length && `run.triggerSource IN ["${triggerSources.join('", "')}"]`,
+          !!triggerSources.length &&
+            `run.triggerSource IN ["${triggerSources.join('", "')}"]`,
           'run.triggerTxHash = $transactionId',
           'run.triggerType = "bridge"',
         ]
