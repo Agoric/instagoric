@@ -292,7 +292,7 @@ spec:
                 - -c
                 - |
                   # Try to see if the node is still catching up.
-                  ([[ $(agd status | jq -r .SyncInfo.catching_up) == false ]]) &
+                  ([[ $(agd status | jq -r .sync_info.catching_up) == false ]]) &
                   tester=$!
                   # Kill the test if it takes longer than we expect.
                   (sleep 5; kill $tester 2>/dev/null) &

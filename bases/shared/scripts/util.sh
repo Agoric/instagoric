@@ -40,10 +40,9 @@ auto_approve() {
         while true; do
             proposals="$(
                 agd query gov proposals \
-                    --chain-id "$CHAIN_ID" \
                     --home "$AGORIC_HOME" \
                     --output "json" \
-                    --status "VotingPeriod" 2>"$VOID"
+                    --proposal-status "passed" 2>"$VOID"
             )"
 
             proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"
@@ -52,7 +51,6 @@ auto_approve() {
                 for proposal_id in $proposal_ids; do
                     votes="$(
                         agd query gov votes "$proposal_id" \
-                            --chain-id "$CHAIN_ID" \
                             --home "$AGORIC_HOME" \
                             --output json 2>"$VOID"
                     )"
@@ -225,7 +223,7 @@ get_node_id_from_cluster_service() {
     while true; do
         node_info="$(get_node_info "http://$service_name.$NAMESPACE.svc.cluster.local:$RPC_PORT")"
         if test -n "$node_info"; then
-            echo "$node_info" | jq '.NodeInfo.id' --raw-output
+            echo "$node_info" | jq '.node_info.id' --raw-output
             break
         fi
         sleep 5
@@ -319,7 +317,7 @@ hang() {
 }
 
 has_node_caught_up() {
-    test "$(get_node_info | jq --raw-output '.SyncInfo.catching_up')" == "false"
+    test "$(get_node_info | jq --raw-output '.sync_info.catching_up')" == "false"
 }
 
 initialize_new_chain() {
@@ -725,8 +723,10 @@ wait_till_syncup_and_register() {
     local stake_amount="50000000ubld"
     local moniker="${2:-"$PODNAME"}"
     local delegation_wallet_name="self"
+    local pub_key=""
     local wallet_name="$1"
     local validator_address=""
+    local validator_json_path="/tmp/$moniker"
 
     validator_address="$(
         agd keys show "$delegation_wallet_name" --address --bech "val" --home "$AGORIC_HOME" --keyring-backend "test" 2>"$VOID"
@@ -739,24 +739,42 @@ wait_till_syncup_and_register() {
                     echo "caught up, register validator"
                     ensure_balance "$wallet_name" "$stake_amount"
                     sleep 10
-                    agd tx staking create-validator \
-                        --amount "$stake_amount" \
+
+                    pub_key="$(agd tendermint show-validator --home "$AGORIC_HOME")"
+                    jq '
+                        {
+                            "amount": $amount,
+                            "commission-max-rate": "0.20",
+                            "commission-max-change-rate": "0.01",
+                            "commission-rate": "0.10",
+                            "details": "",
+                            "min-self-delegation": "1",
+                            "moniker": $moniker,
+                            "pubkey": {
+                                "@type": $pub_key_type,
+                                "key": $pub_key_value
+                            },
+                            "website": $website
+                        }
+                    ' \
+                    --arg "amount" "$stake_amount" \
+                    --arg "moniker" "$moniker" \
+                    --arg "pub_key_type" "$(echo "$pub_key" | jq '."@type"' --raw-output)" \
+                    --arg "pub_key_value" "$(echo "$pub_key" | jq '.key' --raw-output)" \
+                    --arg "website" "http://$POD_IP:$RPC_PORT" \
+                    --null-input \
+                    --raw-output > "$validator_json_path"
+
+                    agd tx staking create-validator "$validator_json_path" \
                         --chain-id "$CHAIN_ID" \
-                        --commission-max-change-rate "0.01" \
-                        --commission-max-rate "0.20" \
-                        --commission-rate "0.10" \
-                        --details "" \
                         --from "$delegation_wallet_name" \
                         --gas "auto" \
                         --gas-adjustment "1.4" \
                         --home "$AGORIC_HOME" \
                         --keyring-backend "test" \
-                        --min-self-delegation "1" \
-                        --moniker "$moniker" \
                         --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
-                        --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
-                        --website "http://$POD_IP:$RPC_PORT" \
                         --yes
+                    rm --force "$validator_json_path"
                     touch "$AGORIC_HOME/registered"
 
                     sleep 10

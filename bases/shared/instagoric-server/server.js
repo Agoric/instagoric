@@ -464,7 +464,7 @@ const getDenoms = async () => {
   const { stdout } = await $`\
     agd query bank balances "${FAUCET_ADDRESS}" \
     --home "${agoricHome}" \
-    --limit "100" \
+    --page-limit 100 \
     --output "json"\
   `;
 
@@ -487,7 +487,6 @@ const getDenoms = async () => {
 const getTransactionStatus = async txHash => {
   let { exitCode, stderr, stdout } = await nothrow($`\
     agd query tx ${txHash} \
-    --chain-id=${chainId} \
     --home=${agoricHome} \
     --node=http://localhost:${RPC_PORT} \
     --output=json \
