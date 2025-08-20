@@ -464,12 +464,16 @@ publicapp.get(
     else {
       const session = driver.session();
       const transactionId = request.params.transactionId;
+      const searchParams = request.query;
 
       try {
-        const triggerSource = /** @type {string} */ (request.query.source);
+        const triggerSources = /** @type {string} */ (searchParams.source || '')
+          .split(',')
+          .filter(triggerSource => Boolean(triggerSource.trim()));
 
         const filters = [
-          triggerSource && 'run.triggerSource = $source',
+          !!triggerSources.length &&
+            `run.triggerSource IN ["${triggerSources.join('", "')}"]`,
           'run.triggerTxHash = $transactionId',
           'run.triggerType = "bridge"',
         ]
@@ -486,7 +490,6 @@ publicapp.get(
             `,
               {
                 transactionId,
-                source: triggerSource,
               },
             )
           );
