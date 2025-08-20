@@ -1,12 +1,13 @@
 // @ts-check
 
 import { publicapp } from './app.js';
-import { COMMANDS, DELEGATE_AMOUNT } from './constants.js';
+import { BASE_AMOUNT, COMMANDS, DELEGATE_AMOUNT } from './constants.js';
 import {
+  constructAmountToSend,
   getFaucetAccountAddress,
   getFaucetAccountBalances,
   getTransactionStatus,
-  sendFunds,
+  sendFundsFromFaucet,
 } from './util.js';
 
 publicapp.get('/balance', async (_, response) => {
@@ -30,13 +31,20 @@ publicapp.get('/send/:address', async (request, response) => {
   let txHash = '';
   const searchParams = request.query;
 
-  const command = /** @type {string} */ (
-    searchParams.command || COMMANDS['SEND_BLD/IBC']
-  );
+  const command =
+    /** @type {string} */ (searchParams.command) || COMMANDS['SEND_BLD/IBC'];
+  const denoms = /** @type {string} */ (searchParams.denoms).split(',');
 
   switch (command) {
+    case COMMANDS.CUSTOM_DENOMS_LIST: {
+      [exitCode, txHash] = await sendFundsFromFaucet(
+        address,
+        constructAmountToSend(String(BASE_AMOUNT), denoms),
+      );
+      break;
+    }
     case COMMANDS['SEND_BLD/IBC']: {
-      [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
+      [exitCode, txHash] = await sendFundsFromFaucet(address, DELEGATE_AMOUNT);
       break;
     }
     default: {

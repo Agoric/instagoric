@@ -13,6 +13,13 @@ import {
 /** @type {string} */
 let FAUCET_ADDRESS;
 
+/**
+ * @param {string} amount
+ * @param {Array<string>} denoms
+ */
+export const constructAmountToSend = (amount, denoms) =>
+  denoms.map(denom => `${amount}${denom}`).join(',');
+
 export const getFaucetAccountAddress = async () => {
   if (!FAUCET_ADDRESS) {
     const { stdout } =
@@ -81,11 +88,11 @@ export const getTransactionStatus = async txHash => {
  * @param {string} amount
  * @returns {Promise<[number, string]>}
  */
-export const sendFunds = async (address, amount) => {
+export const sendFundsFromFaucet = async (address, amount) => {
   let { exitCode, stdout } = await nothrow($`\
     agd tx bank send ${FAUCET_KEYNAME} ${address} ${amount} \
         --broadcast-mode "sync" \
-        --chain-id ${CHAIN_ID} \
+        --chain-id "${CHAIN_ID}" \
         --keyring-backend "test" \
         --keyring-dir "${AGORIC_HOME}" \
         --node "http://localhost:${RPC_PORT}" \

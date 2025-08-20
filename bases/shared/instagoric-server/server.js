@@ -24,7 +24,7 @@ import {
 import {
   getFaucetAccountBalances,
   getTransactionStatus,
-  sendFunds,
+  sendFundsFromFaucet,
 } from './util.js';
 
 // register routes
@@ -495,23 +495,29 @@ const startFaucetWorker = async () => {
 
       switch (command) {
         case COMMANDS.SEND_AND_PROVISION_IST: {
-          [exitCode, txHash] = await sendFunds(address, CLIENT_AMOUNT);
+          [exitCode, txHash] = await sendFundsFromFaucet(
+            address,
+            CLIENT_AMOUNT,
+          );
           if (!exitCode) pollForProvisioning(address, clientType, txHash);
           break;
         }
         case COMMANDS['SEND_BLD/IBC']: {
-          [exitCode, txHash] = await sendFunds(address, DELEGATE_AMOUNT);
+          [exitCode, txHash] = await sendFundsFromFaucet(
+            address,
+            DELEGATE_AMOUNT,
+          );
           break;
         }
         case COMMANDS.FUND_PROV_POOL: {
-          [exitCode, txHash] = await sendFunds(
+          [exitCode, txHash] = await sendFundsFromFaucet(
             String(process.env.PROVISIONING_ADDRESS),
             DELEGATE_AMOUNT,
           );
           break;
         }
         case COMMANDS.CUSTOM_DENOMS_LIST: {
-          [exitCode, txHash] = await sendFunds(
+          [exitCode, txHash] = await sendFundsFromFaucet(
             address,
             constructAmountToSend(
               String(amount ? Number(amount) * 1000_000 : BASE_AMOUNT),
