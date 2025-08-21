@@ -20,6 +20,18 @@ let FAUCET_ADDRESS;
 export const constructAmountToSend = (amount, denoms) =>
   denoms.map(denom => `${amount}${denom}`).join(',');
 
+/**
+ * @param {number} ms
+ */
+export const formatMillisecondsToDuration = ms => {
+  if (ms < 1000) return `${ms} ms`;
+
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds} s`;
+
+  return `${seconds / 60} min`;
+};
+
 export const getFaucetAccountAddress = async () => {
   if (!FAUCET_ADDRESS) {
     const { stdout } =

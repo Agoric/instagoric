@@ -1,6 +1,7 @@
 // @ts-check
 
 import express from 'express';
+import { formatMillisecondsToDuration } from './util.js';
 
 const faucetport = 8003;
 const privateport = 8002;
@@ -14,7 +15,7 @@ const logReq = (request, response, next) => {
   response.on('finish', () =>
     console.log(
       JSON.stringify({
-        duration: Date.now() - time,
+        duration: formatMillisecondsToDuration(Date.now() - time),
         forwarded: request.get('X-Forwarded-For'),
         ip: request.ip,
         method: request.method,
@@ -24,7 +25,7 @@ const logReq = (request, response, next) => {
       }),
     ),
   );
-  next();
+  return next();
 };
 
 export const faucetapp = express();
