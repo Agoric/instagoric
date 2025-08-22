@@ -19,10 +19,13 @@ configMapGenerator:
     files:
       - instagoric-server/app.js
       - instagoric-server/causeway.js
+      - instagoric-server/constants.js
+      - instagoric-server/faucet.js
       - instagoric-server/lockdown.js
       - instagoric-server/neo4j.js
       - instagoric-server/package.json
       - instagoric-server/server.js
+      - instagoric-server/util.js
       - instagoric-server/yarn.lock
   - name: store-stats
     files:
