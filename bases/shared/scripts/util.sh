@@ -42,7 +42,7 @@ auto_approve() {
                 agd query gov proposals \
                     --home "$AGORIC_HOME" \
                     --output "json" \
-                    --proposal-status "passed" 2>"$VOID"
+                    --proposal-status voting-period 2>"$VOID"
             )"
 
             proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"

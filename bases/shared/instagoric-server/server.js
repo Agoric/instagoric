@@ -75,6 +75,7 @@ assert(agoricHome, X`AGORIC_HOME not set`);
 
 const chainId = process.env.CHAIN_ID;
 assert(chainId, X`CHAIN_ID not set`);
+process.env.AGD_CHAIN_ID = chainId;
 
 let dockerImage;
 
@@ -461,12 +462,20 @@ const getDenoms = async () => {
   }
 
   // Not handling pagination as it is used for testing. Limit 100 shoud suffice
-  const { stdout } = await $`\
-    agd query bank balances "${FAUCET_ADDRESS}" \
-    --home "${agoricHome}" \
-    --page-limit 100 \
-    --output "json"\
-  `;
+
+const pageLimit = '100';
+process.env.AGD_PAGE_LIMIT = pageLimit;
+process.env.AGD_LIMIT = pageLimit;
+
+const { stdout } = await $`\
+  agd query bank balances "${FAUCET_ADDRESS}" \
+  --home "${agoricHome}" \
+  --output "json"
+`;
+
+delete process.env.AGD_PAGE_LIMIT;
+delete process.env.AGD_LIMIT;
+
 
   /**
    * @type {{
