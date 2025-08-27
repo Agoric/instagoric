@@ -33,28 +33,31 @@ auto_approve() {
     local proposal_id=""
     local proposal_ids=""
     local proposals=""
+    local proposals_filter=("--proposal-status" "voting-period")
     local votes=""
     local wallet_name="$1"
+
+    if semver_comparison "$(get_agd_sdk_version)" "$LESS_THAN_COMPARATOR" "$(echo "$SDK_VERSIONS" | jq '."0.50.14"' --raw-output)"; then
+        proposals_filter=("--status" "VotingPeriod")
+    fi
 
     if test "$AUTO_APPROVE_PROPOSAL" == "true"; then
         while true; do
             proposals="$(
                 agd query gov proposals \
-                    --chain-id "$CHAIN_ID" \
                     --home "$AGORIC_HOME" \
                     --output "json" \
-                    --status "VotingPeriod" 2>"$VOID"
+                    "${proposals_filter[@]}" 2>"$VOID"
             )"
 
-            proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"
+            proposal_ids="$(echo "$proposals" | jq --raw-output 'if .proposals == null then "" else .proposals[].id end')"
 
             if test -n "$proposal_ids"; then
                 for proposal_id in $proposal_ids; do
                     votes="$(
                         agd query gov votes "$proposal_id" \
-                            --chain-id "$CHAIN_ID" \
                             --home "$AGORIC_HOME" \
-                            --output json 2>"$VOID"
+                            --output "json" 2>"$VOID"
                     )"
                     account_vote="$(
                         test -n "$votes" && echo "$votes" |
@@ -201,6 +204,10 @@ fork_setup() {
 
 }
 
+get_agd_sdk_version() {
+    agd version --long --output "json" | jq '.cosmos_sdk_version' --raw-output
+}
+
 get_ips() {
     local service_name=$1
 
@@ -225,7 +232,7 @@ get_node_id_from_cluster_service() {
     while true; do
         node_info="$(get_node_info "http://$service_name.$NAMESPACE.svc.cluster.local:$RPC_PORT")"
         if test -n "$node_info"; then
-            echo "$node_info" | jq '.NodeInfo.id' --raw-output
+            echo "$node_info" | jq '.node_info.id' --raw-output
             break
         fi
         sleep 5
@@ -234,7 +241,7 @@ get_node_id_from_cluster_service() {
 
 get_node_info() {
     local node_url="${1:-"http://0.0.0.0:$RPC_PORT"}"
-    agd status --home "$AGORIC_HOME" --node "$node_url"
+    curl --fail --location --max-time "5" --silent "$node_url/status" | jq '.result' --raw-output
 }
 
 get_pod_ip() {
@@ -319,7 +326,7 @@ hang() {
 }
 
 has_node_caught_up() {
-    test "$(get_node_info | jq --raw-output '.SyncInfo.catching_up')" == "false"
+    test "$(get_node_info | jq --raw-output '.sync_info.catching_up')" == "false"
 }
 
 initialize_new_chain() {
@@ -440,6 +447,35 @@ possibly_copy_core_dump_files() {
     sleep 5
     find "/" -maxdepth "1" -name "core.*" -print0 |
         xargs --null --replace="_file_" cp _file_ "$CORE_DUMP_FILES_DIRECTORY"
+}
+
+semver_comparison() {
+    local v1="$(echo "$1" | cut --delimiter "-" --fields "1" | tr --delete "v")"
+    local op="$2"
+    local v2="$(echo "$3" | cut --delimiter "-" --fields "1" | tr --delete "v")"
+
+    IFS='.' read -a v1_parts -r <<< "$v1"
+    IFS='.' read -a v2_parts -r <<< "$v2"
+
+    local len1="${#v1_parts[@]}"
+    local len2="${#v2_parts[@]}"
+    local max_len="$(( "$len1" > "$len2" ? "$len1" : "$len2" ))"
+
+    for ((i=0; i<"$max_len"; i++)); do
+        local p1="${v1_parts[i]:-0}"
+        local p2="${v2_parts[i]:-0}"
+
+        if (("$p1" < "$p2")); then
+            [[ "$op" == "$LESS_THAN_COMPARATOR" || "$op" == "$LESS_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$NOT_EQUAL_TO_COMPARATOR" ]] && return 0
+            return 1
+        elif (("$p1" > "$p2")); then
+            [[ "$op" == "$GREATER_THAN_COMPARATOR" || "$op" == "$GREATER_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$NOT_EQUAL_TO_COMPARATOR" ]] && return 0
+            return 1
+        fi
+    done
+
+    [[ "$op" == "$EQUAL_TO_COMPARATOR" || "$op" == "$LESS_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$GREATER_THAN_EQUAL_TO_COMPARATOR" ]] && return 0
+    return 1
 }
 
 setup_a3p_snapshot_data() {
@@ -721,11 +757,16 @@ wait_till_syncup_and_fund() {
 }
 
 wait_till_syncup_and_register() {
-    local stake_amount="50000000ubld"
     local moniker="${2:-"$PODNAME"}"
     local delegation_wallet_name="self"
-    local wallet_name="$1"
+    local pub_key=""
+    local stake_amount="50000000ubld"
     local validator_address=""
+    local wallet_name="$1"
+
+    local validator_json_path="/tmp/$moniker"
+
+    local create_validator_args=("$validator_json_path")
 
     validator_address="$(
         agd keys show "$delegation_wallet_name" --address --bech "val" --home "$AGORIC_HOME" --keyring-backend "test" 2>"$VOID"
@@ -738,24 +779,66 @@ wait_till_syncup_and_register() {
                     echo "caught up, register validator"
                     ensure_balance "$wallet_name" "$stake_amount"
                     sleep 10
-                    agd tx staking create-validator \
-                        --amount "$stake_amount" \
+
+                    pub_key="$(agd tendermint show-validator --home "$AGORIC_HOME")"
+                    jq '
+                        {
+                            "amount": $amount,
+                            "commission-max-rate": "0.20",
+                            "commission-max-change-rate": "0.01",
+                            "commission-rate": "0.10",
+                            "details": "",
+                            "min-self-delegation": "1",
+                            "moniker": $moniker,
+                            "pubkey": {
+                                "@type": $pub_key_type,
+                                "key": $pub_key_value
+                            },
+                            "website": $website
+                        }
+                    ' \
+                    --arg "amount" "$stake_amount" \
+                    --arg "moniker" "$moniker" \
+                    --arg "pub_key_type" "$(echo "$pub_key" | jq '."@type"' --raw-output)" \
+                    --arg "pub_key_value" "$(echo "$pub_key" | jq '.key' --raw-output)" \
+                    --arg "website" "http://$POD_IP:$RPC_PORT" \
+                    --null-input \
+                    --raw-output > "$validator_json_path"
+
+                    if semver_comparison "$(get_agd_sdk_version)" "$LESS_THAN_COMPARATOR" "$(echo "$SDK_VERSIONS" | jq '."0.50.14"' --raw-output)"; then
+                        local validator_data="$(jq --raw-output < "$validator_json_path")"
+                        create_validator_args=(
+                            "--amount"
+                            "$(echo "$validator_data" | jq '.amount' --raw-output)"
+                            "--commission-max-change-rate"
+                            "$(echo "$validator_data" | jq '."commission-max-change-rate"' --raw-output)"
+                            "--commission-max-rate"
+                            "$(echo "$validator_data" | jq '."commission-max-rate"' --raw-output)"
+                            "--commission-rate"
+                            "$(echo "$validator_data" | jq '."commission-rate"' --raw-output)"
+                            "--details"
+                            "$(echo "$validator_data" | jq '.details' --raw-output)"
+                            "--min-self-delegation"
+                            "$(echo "$validator_data" | jq '."min-self-delegation"' --raw-output)"
+                            "--moniker"
+                            "$(echo "$validator_data" | jq '.moniker' --raw-output)"
+                            "--pubkey"
+                            "$pub_key"
+                            "--website"
+                            "$(echo "$validator_data" | jq '.website' --raw-output)"
+                        )
+                    fi
+
+                    agd tx staking create-validator "${create_validator_args[@]}" \
                         --chain-id "$CHAIN_ID" \
-                        --commission-max-change-rate "0.01" \
-                        --commission-max-rate "0.20" \
-                        --commission-rate "0.10" \
-                        --details "" \
                         --from "$delegation_wallet_name" \
                         --gas "auto" \
                         --gas-adjustment "1.4" \
                         --home "$AGORIC_HOME" \
                         --keyring-backend "test" \
-                        --min-self-delegation "1" \
-                        --moniker "$moniker" \
                         --node "$PRIMARY_VALIDATOR_SERVICE_URL:$RPC_PORT" \
-                        --pubkey "$(agd tendermint show-validator --home "$AGORIC_HOME")" \
-                        --website "http://$POD_IP:$RPC_PORT" \
                         --yes
+                    rm --force "$validator_json_path"
                     touch "$AGORIC_HOME/registered"
 
                     sleep 10

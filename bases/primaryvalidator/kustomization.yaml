@@ -1,13 +1,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-# namespace: instagoric
 
-resources:
-  - ../node
-  - ./service.yaml
-
-commonLabels:
-  app: validator-primary
+labels:
+  - pairs:
+      app: validator-primary
+    includeSelectors: true
 
 patches:
   - target:
@@ -69,4 +66,7 @@ patches:
       - op: replace
         path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
         value: 300Gi
-  
+
+resources:
+  - ../node
+  - ./service.yaml

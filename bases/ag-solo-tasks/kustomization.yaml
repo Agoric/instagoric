@@ -1,16 +1,17 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
 
-resources:
-  - ../node
-
-commonLabels:
-  app: ag-solo-tasks
 configMapGenerator:
   - name: tasks
     files:
       - tasks/loaded.js
       - tasks/amm_swap.js
+
+kind: Kustomization
+
+labels:
+  - pairs:
+      app: ag-solo-tasks
+    includeSelectors: true
 
 patches:
   - target:
@@ -69,3 +70,6 @@ patches:
         value: 
           name: SOLO_FUNDING_AMOUNT
           value: 9000000000000000ubld,9000000000000000uist,1provisionpass
+
+resources:
+  - ../node

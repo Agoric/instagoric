@@ -1,5 +1,6 @@
 // @ts-check
 
+import { coerce as semverCoerce, lt as semverLessThan } from 'semver';
 import { $, nothrow } from 'zx';
 
 import {
@@ -7,8 +8,25 @@ import {
   CHAIN_ID,
   FAUCET_KEYNAME,
   RPC_PORT,
+  SDK_VERSIONS,
   TRANSACTION_STATUS,
 } from './constants.js';
+
+/**
+ * @typedef {{
+ *  build_deps: Array<string>;
+ *  build_tags: string;
+ *  commit: string;
+ *  cosmos_sdk_version: string;
+ *  go: string;
+ *  name: string;
+ *  server_name: string;
+ *  version: string;
+ * }} SDK_VERSION_OUTPUT
+ */
+
+/** @type {string} */
+let AGD_SDK_VERSION;
 
 /** @type {string} */
 let FAUCET_ADDRESS;
@@ -32,6 +50,19 @@ export const formatMillisecondsToDuration = ms => {
   return `${seconds / 60} min`;
 };
 
+export const getAgdSdkVersion = async () => {
+  if (!AGD_SDK_VERSION) {
+    const { stdout } = await $`agd version --long --output "json"`;
+    const sdkVersion = /** @type {SDK_VERSION_OUTPUT} */ (
+      JSON.parse(stdout.trim())
+    ).cosmos_sdk_version;
+    const coercedVersion = semverCoerce(sdkVersion);
+    AGD_SDK_VERSION = !coercedVersion ? sdkVersion : coercedVersion.toString();
+  }
+
+  return AGD_SDK_VERSION;
+};
+
 export const getFaucetAccountAddress = async () => {
   if (!FAUCET_ADDRESS) {
     const { stdout } =
@@ -43,9 +74,12 @@ export const getFaucetAccountAddress = async () => {
 };
 
 export const getFaucetAccountBalances = async () => {
-  // Not handling pagination as it is used for testing. Limit 100 shoud suffice
   const { stdout } =
-    await $`agd query bank balances "${await getFaucetAccountAddress()}" --home "${AGORIC_HOME}" --limit "100" --output "json"`;
+    await $`agd query bank balances "${await getFaucetAccountAddress()}" --home "${AGORIC_HOME}" ${
+      semverLessThan(await getAgdSdkVersion(), SDK_VERSIONS['0.50.14'])
+        ? '--limit'
+        : '--page-limit'
+    } "100" --output "json"`;
 
   /**
    * @type {{
@@ -67,7 +101,7 @@ export const getTransactionStatus = async txHash => {
   const txNotFoundErrorMessage = `tx (${txHash}) not found`;
 
   let { exitCode, stderr, stdout } = await nothrow(
-    $`agd query tx ${txHash} --chain-id "${CHAIN_ID}" --home "${AGORIC_HOME}" --node "http://localhost:${RPC_PORT}" --output "json"`,
+    $`agd query tx ${txHash} --home "${AGORIC_HOME}" --node "http://localhost:${RPC_PORT}" --output "json"`,
   );
   exitCode = exitCode ?? 1;
 
