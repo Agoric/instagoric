@@ -232,7 +232,7 @@ get_node_id_from_cluster_service() {
 
 get_node_info() {
     local node_url="${1:-"http://0.0.0.0:$RPC_PORT"}"
-    agd status --home "$AGORIC_HOME" --node "$node_url"
+    curl --fail --location --max-time "5" --silent "$node_url/status" | jq '.result' --raw-output
 }
 
 get_pod_ip() {

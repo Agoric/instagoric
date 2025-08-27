@@ -14,6 +14,10 @@ export const FAUCET_KEYNAME =
   process.env.WHALE_KEYNAME ||
   process.env.SELF_KEYNAME;
 export const RPC_PORT = Number(process.env.RPC_PORT);
+export const SDK_VERSIONS = {
+  '0.47.15': 'v0.47.15',
+  '0.50.14': 'v0.50.14',
+};
 export const TRANSACTION_STATUS = {
   FAILED: 1000,
   NOT_FOUND: 1001,
