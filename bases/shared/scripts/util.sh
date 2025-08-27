@@ -33,7 +33,7 @@ auto_approve() {
     local proposal_id=""
     local proposal_ids=""
     local proposals=""
-    local proposals_filter=("--proposal-status" "passed")
+    local proposals_filter=("--proposal-status" "voting-period")
     local votes=""
     local wallet_name="$1"
 
