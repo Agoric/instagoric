@@ -13,10 +13,15 @@ export CHAIN_ID="${CHAIN_ID:-"instagoric-1"}"
 export CONTAINER_NAME="node"
 export CORE_DUMP_CONFIG_FILE_PATH="/proc/sys/kernel/core_pattern"
 export CORE_DUMP_FILES_DIRECTORY="/state/cores"
+export EQUAL_TO_COMPARATOR='=='
 export FIRST_FORK_NODE_ID="0663e8221928c923d516ea1e8972927f54da9edb"
 export FIRST_FORK_STATEFUL_SET_NAME="fork1"
 export FOLLOWER_STATEFUL_SET_NAME="follower"
+export GREATER_THAN_COMPARATOR='>'
+export GREATER_THAN_EQUAL_TO_COMPARATOR='>='
 export HANG_FILE_PATH="/state/hang"
+export LESS_THAN_COMPARATOR='<'
+export LESS_THAN_EQUAL_TO_COMPARATOR='<='
 export MAINFORK_TIMESTAMP="1753790743"
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
@@ -28,6 +33,7 @@ export NAMESPACE_PATH="/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 export NEO4J_CONFIG_MOUNT_PATH="/config/neo4j"
 export NEO4J_SOURCE_URL="https://raw.githubusercontent.com/agoric-labs/ping-pub-explorer/refs/heads/master/scripts"
 export NODE_KEY_FILE_NAME="node_key.json"
+export NOT_EQUAL_TO_COMPARATOR='!='
 export OTEL_VERSION="0.109.0"
 export P2P_PORT="26656"
 export POD_IP="${POD_IP:-"0.0.0.0"}"
@@ -40,6 +46,10 @@ export PROVISIONING_ADDRESS="agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346"
 export RPC_ENDPOINT="http://rpcnodes.$NAMESPACE.svc.cluster.local"
 export RPC_PORT="26657"
 export SDK_ROOT_PATH="${SDK_ROOT_PATH:-"/usr/src/agoric-sdk"}"
+export SDK_VERSIONS='{
+  "0.47.15": "v0.47.15",
+  "0.50.14": "v0.50.14"
+}'
 export SECOND_FORK_NODE_ID="e234dc7fffdea593c5338a9dd8b5c22ba00731eb"
 export SECOND_FORK_STATEFUL_SET_NAME="fork2"
 export SELF_KEYNAME="self"
@@ -56,7 +66,6 @@ export WHALE_DERIVATIONS="${WHALE_DERIVATIONS:-"100"}"
 export WHALE_KEYNAME="whale"
 export VOID="/dev/null"
 
-export AG_SOLO_BASEDIR="/state/$CHAIN_ID-solo"
 export AGORIC_HOME="/state/$CHAIN_ID"
 export APP_LOG_FILE="/state/app_$BOOT_TIME.log"
 export BOOTSTRAP_CONFIG="${BOOTSTRAP_CONFIG:-"@agoric/vats/decentral-demo-config.json"}"
@@ -70,5 +79,6 @@ export SLOGFILE="/state/slogfile_$BOOT_TIME.json"
 export TOKEN="$(cat $TOKEN_PATH)"
 export WHALE_IBC_DENOMS="10000000000000000$BLD_DENOM,10000000000000000uist,1000000provisionpass,1000000000000000000ibc/toyatom,1000000000000000000ibc/toyusdc,1000000000000000000ibc/toyollie,8000000000000ibc/toyellie,1000000000000000000ibc/usdc1234,1000000000000000000ibc/usdt1234,1000000000000000000ibc/06362C6F7F4FB702B94C13CD2E7C03DEC357683FD978936340B43FBFBC5351EB"
 
+export AG_SOLO_BASEDIR="$AGORIC_HOME-solo"
 export GENESIS_FILE_PATH="$AGORIC_HOME/config/genesis.json"
 export SWINGSTORE="$AGORIC_HOME/data/agoric/swingstore.sqlite"

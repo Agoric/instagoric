@@ -33,8 +33,13 @@ auto_approve() {
     local proposal_id=""
     local proposal_ids=""
     local proposals=""
+    local proposals_filter=("--proposal-status" "passed")
     local votes=""
     local wallet_name="$1"
+
+    if semver_comparison "$(get_agd_sdk_version)" "$LESS_THAN_COMPARATOR" "$(echo "$SDK_VERSIONS" | jq '."0.50.14"' --raw-output)"; then
+        proposals_filter=("--status" "VotingPeriod")
+    fi
 
     if test "$AUTO_APPROVE_PROPOSAL" == "true"; then
         while true; do
@@ -42,17 +47,17 @@ auto_approve() {
                 agd query gov proposals \
                     --home "$AGORIC_HOME" \
                     --output "json" \
-                    --proposal-status "passed" 2>"$VOID"
+                    "${proposals_filter[@]}" 2>"$VOID"
             )"
 
-            proposal_ids="$(echo "$proposals" | jq --raw-output '.proposals[].id')"
+            proposal_ids="$(echo "$proposals" | jq --raw-output 'if .proposals == null then "" else .proposals[].id end')"
 
             if test -n "$proposal_ids"; then
                 for proposal_id in $proposal_ids; do
                     votes="$(
                         agd query gov votes "$proposal_id" \
                             --home "$AGORIC_HOME" \
-                            --output json 2>"$VOID"
+                            --output "json" 2>"$VOID"
                     )"
                     account_vote="$(
                         test -n "$votes" && echo "$votes" |
@@ -197,6 +202,10 @@ fork_setup() {
         --expression "s|^persistent_peers = .*|persistent_peers = '$FIRST_FORK_NODE_ID@$first_fork_ip:$P2P_PORT,$SECOND_FORK_NODE_ID@$second_fork_ip:$P2P_PORT'|" \
         --in-place
 
+}
+
+get_agd_sdk_version() {
+    agd version --long --output "json" | jq '.cosmos_sdk_version' --raw-output
 }
 
 get_ips() {
@@ -438,6 +447,35 @@ possibly_copy_core_dump_files() {
     sleep 5
     find "/" -maxdepth "1" -name "core.*" -print0 |
         xargs --null --replace="_file_" cp _file_ "$CORE_DUMP_FILES_DIRECTORY"
+}
+
+semver_comparison() {
+    local v1="$(echo "$1" | cut --delimiter "-" --fields "1" | tr --delete "v")"
+    local op="$2"
+    local v2="$(echo "$3" | cut --delimiter "-" --fields "1" | tr --delete "v")"
+
+    IFS='.' read -a v1_parts -r <<< "$v1"
+    IFS='.' read -a v2_parts -r <<< "$v2"
+
+    local len1="${#v1_parts[@]}"
+    local len2="${#v2_parts[@]}"
+    local max_len="$(( "$len1" > "$len2" ? "$len1" : "$len2" ))"
+
+    for ((i=0; i<"$max_len"; i++)); do
+        local p1="${v1_parts[i]:-0}"
+        local p2="${v2_parts[i]:-0}"
+
+        if (("$p1" < "$p2")); then
+            [[ "$op" == "$LESS_THAN_COMPARATOR" || "$op" == "$LESS_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$NOT_EQUAL_TO_COMPARATOR" ]] && return 0
+            return 1
+        elif (("$p1" > "$p2")); then
+            [[ "$op" == "$GREATER_THAN_COMPARATOR" || "$op" == "$GREATER_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$NOT_EQUAL_TO_COMPARATOR" ]] && return 0
+            return 1
+        fi
+    done
+
+    [[ "$op" == "$EQUAL_TO_COMPARATOR" || "$op" == "$LESS_THAN_EQUAL_TO_COMPARATOR" || "$op" == "$GREATER_THAN_EQUAL_TO_COMPARATOR" ]] && return 0
+    return 1
 }
 
 setup_a3p_snapshot_data() {
@@ -719,13 +757,16 @@ wait_till_syncup_and_fund() {
 }
 
 wait_till_syncup_and_register() {
-    local stake_amount="50000000ubld"
     local moniker="${2:-"$PODNAME"}"
     local delegation_wallet_name="self"
     local pub_key=""
-    local wallet_name="$1"
+    local stake_amount="50000000ubld"
     local validator_address=""
+    local wallet_name="$1"
+
     local validator_json_path="/tmp/$moniker"
+
+    local create_validator_args=("$validator_json_path")
 
     validator_address="$(
         agd keys show "$delegation_wallet_name" --address --bech "val" --home "$AGORIC_HOME" --keyring-backend "test" 2>"$VOID"
@@ -764,7 +805,31 @@ wait_till_syncup_and_register() {
                     --null-input \
                     --raw-output > "$validator_json_path"
 
-                    agd tx staking create-validator "$validator_json_path" \
+                    if semver_comparison "$(get_agd_sdk_version)" "$LESS_THAN_COMPARATOR" "$(echo "$SDK_VERSIONS" | jq '."0.50.14"' --raw-output)"; then
+                        local validator_data="$(jq --raw-output < "$validator_json_path")"
+                        create_validator_args=(
+                            "--amount"
+                            "$(echo "$validator_data" | jq '.amount' --raw-output)"
+                            "--commission-max-change-rate"
+                            "$(echo "$validator_data" | jq '."commission-max-change-rate"' --raw-output)"
+                            "--commission-max-rate"
+                            "$(echo "$validator_data" | jq '."commission-max-rate"' --raw-output)"
+                            "--commission-rate"
+                            "$(echo "$validator_data" | jq '."commission-rate"' --raw-output)"
+                            "--details"
+                            "$(echo "$validator_data" | jq '.details' --raw-output)"
+                            "--min-self-delegation"
+                            "$(echo "$validator_data" | jq '."min-self-delegation"' --raw-output)"
+                            "--moniker"
+                            "$(echo "$validator_data" | jq '.moniker' --raw-output)"
+                            "--pubkey"
+                            "$pub_key"
+                            "--website"
+                            "$(echo "$validator_data" | jq '.website' --raw-output)"
+                        )
+                    fi
+
+                    agd tx staking create-validator "${create_validator_args[@]}" \
                         --chain-id "$CHAIN_ID" \
                         --from "$delegation_wallet_name" \
                         --gas "auto" \
