@@ -474,11 +474,10 @@ setup_a3p_snapshot_data() {
 
 setup_neo4j() {
     local config_path="/state/neo4j"
-    local slogger_path="scripts/slogger.js"
+    local slogger_path="slogger.js"
 
     local file_paths=(
         ".yarn/patches/agoric-telemetry.patch"
-        ".yarn/patches/mermaid.patch"
         "$slogger_path"
         ".yarnrc.yml"
         "package.json"
