@@ -101,7 +101,7 @@ export const getTransactionStatus = async txHash => {
   const txNotFoundErrorMessage = `tx (${txHash}) not found`;
 
   let { exitCode, stderr, stdout } = await nothrow(
-    $`agd query tx ${txHash} --chain-id "${CHAIN_ID}" --home "${AGORIC_HOME}" --node "http://localhost:${RPC_PORT}" --output "json"`,
+    $`agd query tx ${txHash} --home "${AGORIC_HOME}" --node "http://localhost:${RPC_PORT}" --output "json"`,
   );
   exitCode = exitCode ?? 1;
 
