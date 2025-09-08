@@ -22,7 +22,7 @@ export GREATER_THAN_EQUAL_TO_COMPARATOR='>='
 export HANG_FILE_PATH="/state/hang"
 export LESS_THAN_COMPARATOR='<'
 export LESS_THAN_EQUAL_TO_COMPARATOR='<='
-export MAINFORK_TIMESTAMP="1753790743"
+export MAINFORK_TIMESTAMP="1756488073"
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
 export MAINNET_SNAPSHOT="agoric_19825658.tar.lz4"
