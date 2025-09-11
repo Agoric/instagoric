@@ -1,0 +1,123 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: noble-node
+spec:
+  podManagementPolicy: "Parallel"
+  selector:
+    matchLabels:
+      app: noble-node
+  serviceName: noble-node
+  replicas: 1
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: noble-node
+
+    spec:
+      terminationGracePeriodSeconds: 10
+      serviceAccountName: opentracing-agent
+      containers:
+        - name: noble-node
+          image: debian:bullseye
+          ports:
+            - containerPort: 26656 # P2P Port
+              name: p2p
+            - containerPort: 26657 # RPC Port
+              name: rpc
+            - containerPort: 9090 # API Port
+              name: grpc
+            - containerPort: 1317 # REST Port
+              name: api
+          env:
+            - name: MONIKER
+              value: "noble-testnet" # Replace with your node name
+            - name: CHAIN_ID
+              value: "grand-1" 
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -x
+              apt-get update && apt-get install wget curl jq lz4 --yes
+              NOBLE_HOME=/state/$CHAIN_ID
+
+              # change this to match the latest release on chain upgrade
+              wget https://github.com/noble-assets/noble/releases/download/v9.0.0-rc.1/nobled_linux-amd64
+              wget https://github.com/noble-assets/noble/releases/download/v9.0.0-rc.1/checksum.txt
+              BINARY_CHECKSUM=$(sha256sum nobled_linux-amd64 | cut -d ' ' -f 1)
+              EXPECTED_CHECKSUM=$(head -n 1 checksum.txt | cut -d ' ' -f 1)
+              if [ "$BINARY_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+                echo "Checksum mismatch!"
+                echo "Expected: $EXPECTED_CHECKSUM"
+                echo "Got: $BINARY_CHECKSUM"
+                exit 1
+              fi
+              mv nobled_linux-amd64 /state/nobled
+              chmod +x /state/nobled              
+              mkdir -p $NOBLE_HOME
+
+              /state/nobled init $MONIKER --chain-id $CHAIN_ID --home $NOBLE_HOME
+
+              wget -O addrbook.json https://snapshots.polkachu.com/testnet-addrbook/noble/addrbook.json --inet4-only
+              mv addrbook.json $NOBLE_HOME/config
+              # uncomment the following line and update the snapshot tarball when redploying this node 
+              # to catch up to current state in case of halt, then comment and redeploy again so 
+              # pod restarts don't start the chain from scratch
+              # curl -o - -L https://snapshots.polkachu.com/testnet-snapshots/noble/noble_23034627.tar.lz4 | lz4 -c -d - | tar -x -C $NOBLE_HOME
+
+              # Set the listening addresses to 0.0.0.0
+              sed -i 's|^laddr = "tcp://127.0.0.1:26657"|laddr = "tcp://0.0.0.0:26657"|g' $NOBLE_HOME/config/config.toml
+              sed -i 's|^laddr = "tcp://127.0.0.1:1317"|laddr = "tcp://0.0.0.0:1317"|g' $NOBLE_HOME/config/app.toml
+              sed -i 's|^address = "127.0.0.1:9090"|address = "0.0.0.0:9090"|g' $NOBLE_HOME/config/app.toml
+
+              /state/nobled start --home $NOBLE_HOME --log_format json
+          volumeMounts:
+            - name: noble-state
+              mountPath: /state
+          resources:
+            limits:
+              cpu: 1000m
+              ephemeral-storage: 5Gi
+              memory: 8Gi
+            requests:
+              cpu: 1000m
+              ephemeral-storage: 5Gi
+              memory: 4Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: noble-state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 200Gi
+        storageClassName: premium-rwo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: noble-node
+spec:
+  selector:
+    app: noble-node
+  ports:
+    - protocol: TCP
+      port: 26656 # P2P Port
+      targetPort: 26656
+      name: p2p
+    - protocol: TCP
+      port: 26657 # RPC Port
+      targetPort: 26657
+      name: rpc
+    - protocol: TCP
+      port: 9090 # API Port
+      targetPort: 9090
+      name: grpc
+    - protocol: TCP
+      port: 1317 # REST Port
+      targetPort: 1317
+      name: api
+  type: ClusterIP
