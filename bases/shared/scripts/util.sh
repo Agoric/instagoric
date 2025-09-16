@@ -389,6 +389,7 @@ initialize_new_chain() {
                 .app_state.mint.params.inflation_rate_change = "0.000000000000000000" |
                 .app_state.mint.params.inflation_min = "0.000000000000000000" |
                 .app_state.mint.params.inflation_max = "0.000000000000000000" |
+                .app_state.gov.params.voting_period = $voting_period |
                 .app_state.gov.voting_params.voting_period = $voting_period
             ' <"$GENESIS_FILE_PATH"
         )"
