@@ -335,7 +335,9 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
 
 
   try {
-    const response = await fetch('https://some_endpoint/consume', {
+
+    
+    const response = await fetch('https://<worker_endpoint>/consume', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -362,6 +364,12 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
     }
     const YMAX_WALLET = 'ymax-whale';
     await $`echo ${YMAX_MNEMONIC} | agd --home=${AGORIC_HOME} keys add ${YMAX_WALLET} --keyring-backend=test --recover`;
+
+
+    // Provision the smart wallet using agd command
+    // agd tx swingset provision-one wallet $(walletAddress) SMART_WALLET --from $(ADDR) -y -b block
+
+
 
     // Now send some ubld from YMAX_WALLET to walletAddress using agd command
     const AMOUNT_TO_SEND = '1000000ubld'; // 1 BLD
