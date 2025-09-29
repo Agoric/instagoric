@@ -324,6 +324,60 @@ publicapp.get('/metrics-config', async (_, res) => {
   res.send(result);
 });
 
+// Write me a POST endpoint which takes wallet address and a access_token to validate. access_token will be valdated by hitting an "some_endpoint/consume"
+
+publicapp.post('/claim-ymax-access', async (req, res) => {
+  const { walletAddress, access_token } = req.body;
+
+  if (!walletAddress || !access_token) {
+    return res.status(400).send('Missing wallet address or access token');
+  }
+
+
+  try {
+    const response = await fetch('https://some_endpoint/consume', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        walletAddress,
+        access_token
+      })
+    });
+
+
+    if (response.status !== 200) {
+      return res.status(401).send('Invalid access token');
+    }
+    // Check that wallet address should be of agoric1
+    if (!/^agoric1[0-9a-zA-Z]{38}$/.test(walletAddress)) {
+      return res.status(400).send('Invalid wallet address');
+    }
+
+    // Now read YMAX_MNEMONIC FROM env (k8 secret) and recover wallet from it using agd command
+    const { YMAX_MNEMONIC } = process.env;
+    if (!YMAX_MNEMONIC) {
+      return res.status(500).send('YMAX_MNEMONIC not found');
+    }
+    const YMAX_WALLET = 'ymax-whale';
+    await $`echo ${YMAX_MNEMONIC} | agd --home=${AGORIC_HOME} keys add ${YMAX_WALLET} --keyring-backend=test --recover`;
+
+    // Now send some ubld from YMAX_WALLET to walletAddress using agd command
+    const AMOUNT_TO_SEND = '1000000ubld'; // 1 BLD
+    const { stdout, stderr } = await $`agd --home=${AGORIC_HOME} tx bank send ${YMAX_WALLET} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --node=https://${NETNAME}.rpc.agoric.net:443 --yes --broadcast-mode=sync --output=json`;
+    const output = JSON.parse(stdout);
+    if (output.code) {
+      console.error('Error sending funds:', stderr);
+      return res.status(500).send('Error sending funds');
+    }
+    
+  } catch (error) {
+    console.error('Error validating access token:', error);
+    return res.status(500).send('Internal server error');
+  }
+});
+
 /**
  * @param {string} dockerimage
  * @param {string} dockertag
