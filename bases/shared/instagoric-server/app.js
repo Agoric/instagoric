@@ -39,6 +39,17 @@ publicapp.use(logReq);
 publicapp.use(express.json());
 publicapp.use(express.urlencoded({ extended: true }));
 
+publicapp.use((req, res, next) => {
+
+  if (req.path === '/claim-ymax-access') {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204); // preflight success, no body
+    }
+  }
+  next();
+});
+
 faucetapp.listen(faucetport, () =>
   console.log(`faucetapp listening on port ${faucetport}`),
 );
