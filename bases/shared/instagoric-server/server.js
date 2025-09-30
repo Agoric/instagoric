@@ -36,6 +36,7 @@ const { details: X } = assert;
 let CLUSTER_NAME;
 
 const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || `${BASE_AMOUNT}ibc/toyusdc`;
+const TOKEN_AUTHENTICATOR_API_URL = "https://ymax-token-authenticator.agoric-core.workers.dev";
 
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
@@ -333,11 +334,10 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
     return res.status(400).send('Missing wallet address or access token');
   }
 
-
   try {
 
-    
-    const response = await fetch('https://<worker_endpoint>/consume', {
+
+    const response = await fetch(`${TOKEN_AUTHENTICATOR_API_URL}/verify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -358,27 +358,30 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
     }
 
     // Now read YMAX_MNEMONIC FROM env (k8 secret) and recover wallet from it using agd command
-    const { YMAX_MNEMONIC } = process.env;
-    if (!YMAX_MNEMONIC) {
-      return res.status(500).send('YMAX_MNEMONIC not found');
-    }
-    const YMAX_WALLET = 'ymax-whale';
-    await $`echo ${YMAX_MNEMONIC} | agd --home=${AGORIC_HOME} keys add ${YMAX_WALLET} --keyring-backend=test --recover`;
+    // const { YMAX_MNEMONIC } = process.env;
+    // if (!YMAX_MNEMONIC) {
+    //   return res.status(500).send('YMAX_MNEMONIC not found');
+    // }
+    // const YMAX_WALLET = 'ymax-whale';
+    // await $`echo ${YMAX_MNEMONIC} | agd --home=${AGORIC_HOME} keys add ${YMAX_WALLET} --keyring-backend=test --recover`;
 
 
     // Provision the smart wallet using agd command
+
     // agd tx swingset provision-one wallet $(walletAddress) SMART_WALLET --from $(ADDR) -y -b block
 
 
 
     // Now send some ubld from YMAX_WALLET to walletAddress using agd command
     const AMOUNT_TO_SEND = '1000000ubld'; // 1 BLD
-    const { stdout, stderr } = await $`agd --home=${AGORIC_HOME} tx bank send ${YMAX_WALLET} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --node=https://${NETNAME}.rpc.agoric.net:443 --yes --broadcast-mode=sync --output=json`;
+    const { stdout, stderr } = await $`agd tx bank send ${FAUCET_KEYNAME} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --home=${AGORIC_HOME} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --node=https://${NETNAME}.rpc.agoric.net:443 --yes --broadcast-mode=sync --output=json`;
     const output = JSON.parse(stdout);
     if (output.code) {
       console.error('Error sending funds:', stderr);
       return res.status(500).send('Error sending funds');
     }
+
+    await provisionAddress(walletAddress, 'SMART_WALLET');
     
   } catch (error) {
     console.error('Error validating access token:', error);
