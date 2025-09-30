@@ -154,6 +154,12 @@ spec:
                   name: instagoric-secrets
                   key: FAUCET_ADDRESS
                   optional: true
+            - name: YMAX_MNEMONIC
+              valueFrom:
+                secretKeyRef:
+                  name: instagoric-custom-secrets
+                  key: YMAX_MNEMONIC
+                  optional: true
             - name: HONEYCOMB_API_KEY
               valueFrom:
                 secretKeyRef:

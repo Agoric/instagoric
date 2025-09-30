@@ -36,6 +36,9 @@ faucetapp.use(logReq);
 privateapp.use(logReq);
 publicapp.use(logReq);
 
+publicapp.use(express.json());
+publicapp.use(express.urlencoded({ extended: true }));
+
 faucetapp.listen(faucetport, () =>
   console.log(`faucetapp listening on port ${faucetport}`),
 );
