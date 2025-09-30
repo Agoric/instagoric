@@ -7,10 +7,13 @@ import https from 'https';
 import process from 'process';
 import tmp from 'tmp';
 import { $, fetch, fs, nothrow, sleep } from 'zx';
+// import { execa } from "execa";
+import { execFileSync } from 'node:child_process';
 
 import { makeSubscriptionKit } from '@agoric/notifier';
 
 import { faucetapp, privateapp, publicapp } from './app.js';
+import { spawn } from "node:child_process";
 import {
   AGORIC_HOME,
   BASE_AMOUNT,
@@ -37,6 +40,8 @@ let CLUSTER_NAME;
 
 const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || `${BASE_AMOUNT}ibc/toyusdc`;
 
+
+
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
 const FAKE = process.env.FAKE || process.argv[2] === '--fake';
@@ -46,6 +51,10 @@ const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const NETNAME = process.env.NETNAME || 'devnet';
 const podname =
   process.env.POD_NAME || process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME;
+  
+const TOKEN_AUTHENTICATOR_API_URL = NETNAME === 'devnet'
+  ? "https://ymax-token-authenticator.agoric-core.workers.dev"
+  : "https://ymax-token-authenticator-mainnet.agoric-core.workers.dev";
 
 if (FAKE) {
   console.log('FAKE MODE');
@@ -75,14 +84,14 @@ const namespace =
 const revision = FAKE
   ? 'fake_revision'
   : fs
-      .readFileSync(
-        `${process.env.SDK_ROOT_PATH}/packages/solo/public/git-revision.txt`,
-        {
-          encoding: FILE_ENCODING,
-          flag: 'r',
-        },
-      )
-      .trim();
+    .readFileSync(
+      `${process.env.SDK_ROOT_PATH}/packages/solo/public/git-revision.txt`,
+      {
+        encoding: FILE_ENCODING,
+        flag: 'r',
+      },
+    )
+    .trim();
 
 const getMetricsRequest = async () => {
   const url = new URL('http://localhost:26661/metrics');
@@ -276,15 +285,13 @@ publicapp.get('/', (_, res) => {
 ██║██║ ╚████║███████║   ██║   ██║  ██║╚██████╔╝╚██████╔╝██║  ██║██║╚██████╗
 ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝
 
-Chain: ${CHAIN_ID}${
-    process.env.NETPURPOSE !== undefined
+Chain: ${CHAIN_ID}${process.env.NETPURPOSE !== undefined
       ? `\nPurpose: ${process.env.NETPURPOSE}`
       : ''
-  }
+    }
 Revision: ${revision}
-Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${
-    DOCKERTAG || dockerImage.split(':')[1]
-  }
+Docker Image: ${DOCKERIMAGE || dockerImage.split(':')[0]}:${DOCKERTAG || dockerImage.split(':')[1]
+    }
 Revision Link: <a href="https://github.com/Agoric/agoric-sdk/tree/${revision}">https://github.com/Agoric/agoric-sdk/tree/${revision}</a>
 Network Config: <a href="https://${netname}${domain}/network-config">https://${netname}${domain}/network-config</a>
 Docker Compose: <a href="https://${netname}${domain}/docker-compose.yml">https://${netname}${domain}/docker-compose.yml</a>
@@ -295,11 +302,9 @@ Explorer: <a href="https://${netname}.explorer${domain}">https://${netname}.expl
 Faucet: <a href="https://${netname}.faucet${domain}">https://${netname}.faucet${domain}</a>
 Logs: <a href=${logsUrl}>Click Here</a>
 Monitoring Dashboard: <a href=${dashboardUrl}>Click Here</a>
-VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${
-    netname === 'followmain' ? 'main-a' : netname
-  }.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${
-    netname === 'followmain' ? 'main-a' : netname
-  }.rpc.agoric.net</a>
+VStorage: <a href="https://vstorage.agoric.net/?path=&endpoint=https://${netname === 'followmain' ? 'main-a' : netname
+    }.rpc.agoric.net">https://vstorage.agoric.net/?endpoint=https://${netname === 'followmain' ? 'main-a' : netname
+    }.rpc.agoric.net</a>
 
 UIs:
 Main-branch Wallet: <a href="https://main.wallet-app.pages.dev/wallet/">https://main.wallet-app.pages.dev/wallet/</a>
@@ -322,6 +327,108 @@ publicapp.get('/metrics-config', async (_, res) => {
   res.setHeader('Content-type', 'text/plain;charset=UTF-8');
   const result = await metricsCache.getData();
   res.send(result);
+});
+
+// Write me a POST endpoint which takes wallet address and a access_token to validate. access_token will be valdated by hitting an "some_endpoint/consume"
+
+publicapp.post('/claim-ymax-access', async (req, res) => {
+  const { walletAddress, access_token } = req.body;
+
+  async function getYmaxWalletAddress(YMAX_WALLET_KEY) {
+    const result = await nothrow(
+      $`agd keys show -a ${YMAX_WALLET_KEY} --home=${AGORIC_HOME} --keyring-backend=test`
+    );
+
+    if (result.exitCode === 0) {
+      const address = result.stdout.trim();
+      console.log("Wallet exists. Address:", address);
+      return address;
+    } else {
+      console.error("Wallet not found or error:", result.stderr);
+      return null;
+    }
+  }
+
+  if (!walletAddress || !access_token) {
+    return res.status(400).send('Missing wallet address or access token');
+  }
+
+  try {
+
+
+    const response = await fetch(`${TOKEN_AUTHENTICATOR_API_URL}/verify`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        token: access_token
+      })
+    });
+
+
+    if (response.status !== 200) {
+      return res.status(401).send('Invalid access token');
+    }
+    // Check that wallet address should be of agoric1
+    if (!/^agoric1[0-9a-zA-Z]{38}$/.test(walletAddress)) {
+      return res.status(400).send('Invalid wallet address');
+    }
+
+    // Now read YMAX_MNEMONIC FROM env (k8 secret) and recover wallet from it using agd command
+    const { YMAX_MNEMONIC } = process.env;
+    if (!YMAX_MNEMONIC) {
+      return res.status(500).send('YMAX_MNEMONIC not found');
+    }
+    const YMAX_WALLET_KEY = 'ymax-onboarding-whale';
+
+
+    let YMAX_WHALE_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
+
+    if (!YMAX_WHALE_WALLET_ADDRESS) {
+      execFileSync(
+        "agd",
+        [
+          "keys",
+          "add",
+          YMAX_WALLET_KEY,
+          "--home", AGORIC_HOME || '',
+          "--keyring-backend", "test",
+          "--recover"
+        ],
+        {
+          input: YMAX_MNEMONIC + "\n\n", // feed the mnemonic + newline
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"], // capture output
+        }
+      );
+      YMAX_WHALE_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
+    }
+
+    const AMOUNT_TO_SEND = '12000000ubld,1upoc26'; // 12 BLD and 1 upoc
+
+    const { stdout, stderr } = await $`agd tx bank send ${YMAX_WALLET_KEY} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --home=${AGORIC_HOME} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --gas=auto --yes --broadcast-mode=sync --output=json`;
+    const output = JSON.parse(stdout);
+    if (output.code) {
+      console.error('Error sending funds:', stderr);
+      return res.status(500).send('Error sending funds');
+    }
+
+    // Consume the access token now after success
+    await fetch(`${TOKEN_AUTHENTICATOR_API_URL}/consume`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        token: access_token
+      })
+    });
+    return res.status(200).send('Funds sent successfully');
+  } catch (error) {
+    console.error('Error validating access token:', error);
+    return res.status(500).send('Internal server error');
+  }
 });
 
 /**
@@ -449,8 +556,8 @@ const pollForProvisioning = async (address, clientType, txHash) => {
     : status === TRANSACTION_STATUS.SUCCESSFUL
       ? await provisionAddress(address, clientType)
       : console.log(
-          `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
-        );
+        `Not provisioning address "${address}" of type "${clientType}" as transaction "${txHash}" failed`,
+      );
 };
 
 /**
@@ -458,7 +565,7 @@ const pollForProvisioning = async (address, clientType, txHash) => {
  * @param {string} clientType
  * @returns {Promise<void>}
  */
-const provisionAddress = async (address, clientType) => {
+const provisionAddress = async (address, clientType, rpcUrl = 'http://localhost:${RPC_PORT}') => {
   let { exitCode, stderr } = await nothrow($`\
     agd tx swingset provision-one faucet_provision ${address} ${clientType} \
     --broadcast-mode=block \
@@ -466,7 +573,7 @@ const provisionAddress = async (address, clientType) => {
     --from=${FAUCET_KEYNAME} \
     --keyring-backend=test \
     --keyring-dir=${AGORIC_HOME} \
-    --node=http://localhost:${RPC_PORT} \
+    --node=${rpcUrl} \
     --yes \
   `);
   exitCode = exitCode ?? 1;
