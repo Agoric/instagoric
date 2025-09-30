@@ -375,12 +375,12 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
     if (!YMAX_MNEMONIC) {
       return res.status(500).send('YMAX_MNEMONIC not found');
     }
-    const YMAX_WALLET_KEY = 'ymax-whale';
+    const YMAX_WALLET_KEY = 'ymax-onboarding-whale';
 
 
-    let YMAX_WALLET_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
+    let YMAX_WHALE_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
 
-    if (!YMAX_WALLET_WALLET_ADDRESS) {
+    if (!YMAX_WHALE_WALLET_ADDRESS) {
       execFileSync(
         "agd",
         [
@@ -397,7 +397,7 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
           stdio: ["pipe", "pipe", "pipe"], // capture output
         }
       );
-      YMAX_WALLET_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
+      YMAX_WHALE_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
     }
 
 
