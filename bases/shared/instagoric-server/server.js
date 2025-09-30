@@ -39,7 +39,8 @@ const { details: X } = assert;
 let CLUSTER_NAME;
 
 const CLIENT_AMOUNT = process.env.CLIENT_AMOUNT || `${BASE_AMOUNT}ibc/toyusdc`;
-const TOKEN_AUTHENTICATOR_API_URL = "https://ymax-token-authenticator.agoric-core.workers.dev";
+
+
 
 const DOCKERTAG = process.env.DOCKERTAG; // Optional.
 const DOCKERIMAGE = process.env.DOCKERIMAGE; // Optional.
@@ -50,6 +51,10 @@ const NETDOMAIN = process.env.NETDOMAIN || '.agoric.net';
 const NETNAME = process.env.NETNAME || 'devnet';
 const podname =
   process.env.POD_NAME || process.env.PRIMARY_VALIDATOR_STATEFUL_SET_NAME;
+  
+const TOKEN_AUTHENTICATOR_API_URL = NETNAME === 'devnet'
+  ? "https://ymax-token-authenticator.agoric-core.workers.dev"
+  : "https://ymax-token-authenticator-mainnet.agoric-core.workers.dev";
 
 if (FAKE) {
   console.log('FAKE MODE');
@@ -400,29 +405,9 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
       YMAX_WHALE_WALLET_ADDRESS = await getYmaxWalletAddress(YMAX_WALLET_KEY)
     }
 
-
-    // Send some amount to ymax-wallet for testing:
-    // const AMOUNT_TO_SEND = '25000000ubld'; // 25 BLD
-
-    // const { stdout: _stdout, stderr: _stderr } = await $`agd tx bank send ${FAUCET_KEYNAME} ${YMAX_WALLET_WALLET_ADDRESS} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --home=${AGORIC_HOME} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --node=https://${NETNAME}.rpc.agoric.net:443 --yes --broadcast-mode=sync --output=json`;
-
-    // const _output = JSON.parse(_stdout);
-    // if (_output.code) {
-    //   console.error('Error sending funds:', _stdout);
-    //   return res.status(500).send('Error sending funds');
-    // }
-
-    // // Now send some ubld from YMAX_WALLET to walletAddress using agd command
-
-    // // await for 2 3 seconds
-
-    // // TODO: will add polling here
-    // await sleep(3000);
-
-    
     const AMOUNT_TO_SEND = '12000000ubld,1upoc26'; // 12 BLD and 1 upoc
 
-    const { stdout, stderr } = await $`agd tx bank send ${YMAX_WALLET_KEY} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --home=${AGORIC_HOME} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --node=https://${NETNAME}.rpc.agoric.net:443 --yes --broadcast-mode=sync --output=json`;
+    const { stdout, stderr } = await $`agd tx bank send ${YMAX_WALLET_KEY} ${walletAddress} ${AMOUNT_TO_SEND} --chain-id=${CHAIN_ID} --home=${AGORIC_HOME} --keyring-backend=test --keyring-dir=${AGORIC_HOME} --gas=auto --yes --broadcast-mode=sync --output=json`;
     const output = JSON.parse(stdout);
     if (output.code) {
       console.error('Error sending funds:', stderr);
