@@ -332,6 +332,10 @@ publicapp.get('/metrics-config', async (_, res) => {
 // Write me a POST endpoint which takes wallet address and a access_token to validate. access_token will be valdated by hitting an "some_endpoint/consume"
 
 publicapp.post('/claim-ymax-access', async (req, res) => {
+  if (!process.env.YMAX_ACCESS_CLAIM_ENABLE) {
+    return res.status(403).send('YMAX access claim is disabled');
+  }
+
   const { walletAddress, access_token } = req.body;
 
   async function getYmaxWalletAddress(YMAX_WALLET_KEY) {
