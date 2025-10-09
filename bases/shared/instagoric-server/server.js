@@ -23,6 +23,7 @@ import {
   FAUCET_KEYNAME,
   RPC_PORT,
   TRANSACTION_STATUS,
+  PROVISIONING_POOL_ADDR,
 } from './constants.js';
 import {
   getFaucetAccountBalances,
@@ -355,7 +356,6 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
 
   try {
 
-
     const response = await fetch(`${TOKEN_AUTHENTICATOR_API_URL}/verify`, {
       method: 'POST',
       headers: {
@@ -565,10 +565,10 @@ const pollForProvisioning = async (address, clientType, txHash) => {
  * @param {string} clientType
  * @returns {Promise<void>}
  */
-const provisionAddress = async (address, clientType, rpcUrl = 'http://localhost:${RPC_PORT}') => {
+const provisionAddress = async (address, clientType, rpcUrl = `http://localhost:${RPC_PORT}`) => {
   let { exitCode, stderr } = await nothrow($`\
     agd tx swingset provision-one faucet_provision ${address} ${clientType} \
-    --broadcast-mode=block \
+    --broadcast-mode=sync \
     --chain-id=${CHAIN_ID} \
     --from=${FAUCET_KEYNAME} \
     --keyring-backend=test \
@@ -618,7 +618,7 @@ const startFaucetWorker = async () => {
         }
         case COMMANDS.FUND_PROV_POOL: {
           [exitCode, txHash] = await sendFundsFromFaucet(
-            String(process.env.PROVISIONING_ADDRESS),
+            String(PROVISIONING_POOL_ADDR),
             DELEGATE_AMOUNT,
           );
           break;
