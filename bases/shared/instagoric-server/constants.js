@@ -9,10 +9,13 @@ export const COMMANDS = {
   FUND_PROV_POOL: 'fund_provision_pool',
   CUSTOM_DENOMS_LIST: 'custom_denoms_list',
 };
+const SELF_KEYNAME = 'self';
+export const PROVISIONING_POOL_ADDR = 'agoric1megzytg65cyrgzs6fvzxgrcqvwwl7ugpt62346';
+
 export const FAUCET_KEYNAME =
   process.env.FAUCET_KEYNAME ||
   process.env.WHALE_KEYNAME ||
-  process.env.SELF_KEYNAME;
+  SELF_KEYNAME;
 export const RPC_PORT = Number(process.env.RPC_PORT);
 export const SDK_VERSIONS = {
   '0.47.15': 'v0.47.15',
@@ -26,6 +29,5 @@ export const TRANSACTION_STATUS = {
 
 export const DELEGATE_AMOUNT =
   process.env.DELEGATE_AMOUNT ||
-  `${BASE_AMOUNT * 3}${
-    process.env.BLD_DENOM
+  `${BASE_AMOUNT * 3}${process.env.BLD_DENOM
   },${BASE_AMOUNT}ibc/toyatom,${BASE_AMOUNT}ibc/toyellie,${BASE_AMOUNT}ibc/toyusdc,${BASE_AMOUNT}ibc/toyollie`;
