@@ -421,7 +421,8 @@ publicapp.post('/claim-ymax-access', async (req, res) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        token: access_token
+        token: access_token,
+        wallet: walletAddress
       })
     });
     return res.status(200).send('Funds sent successfully');
