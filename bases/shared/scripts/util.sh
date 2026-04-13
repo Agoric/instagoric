@@ -587,17 +587,7 @@ start_helper() {
 }
 
 update_config_files() {
-    if test -n "$PRUNING"; then
-        sed --in-place "s/^pruning =.*/pruning = \"$PRUNING\"/" "$AGORIC_HOME/config/app.toml"
-    else
-        sed "$AGORIC_HOME/config/app.toml" \
-            --expression 's|^pruning-interval =.*|pruning-interval = 1000|' \
-            --expression 's|^pruning-keep-every =.*|pruning-keep-every = 1000|' \
-            --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 1000|}' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent =.*|snapshot-keep-recent = 10|}' \
-            --in-place
-    fi
+    update_pruning_config
 
     sed "$AGORIC_HOME/config/app.toml" \
         --expression '/^\[api]/,/^\[/{s|^address =.*|address = "tcp://0.0.0.0:1317"|}' \
@@ -622,6 +612,23 @@ update_config_files() {
         --expression 's|^prometheus = false|prometheus = true|' \
         --expression "/^\[rpc]/,/^\[/{s|^laddr =.*|laddr = 'tcp://0.0.0.0:$RPC_PORT'|}" \
         --in-place
+}
+
+update_pruning_config() {
+    if test -n "$PRUNING"; then
+        sed --in-place "s|^pruning =.*|pruning = \"$PRUNING\"|" "$AGORIC_HOME/config/app.toml"
+
+        if test -n "$PRUNING_KEEP_RECENT"; then
+            sed --in-place "s|^pruning-keep-recent =.*|pruning-keep-recent = $PRUNING_KEEP_RECENT|" "$AGORIC_HOME/config/app.toml"
+        fi
+    else
+        sed "$AGORIC_HOME/config/app.toml" \
+            --expression 's|^pruning-interval =.*|pruning-interval = 1000|' \
+            --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 1000|}' \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent =.*|snapshot-keep-recent = 10|}' \
+            --in-place
+    fi
 }
 
 update_swingset_config_file() {
