@@ -20,8 +20,9 @@ source "$CURRENT_DIRECTORY_PATH/util.sh"
 set -x
 
 mkdir --parents "$AGORIC_HOME" "$TMPDIR"
-# shellcheck disable=SC2086,SC2115
-rm --force --recursive -- $TMPDIR/..?* $TMPDIR/.[!.]* $TMPDIR/*
+
+rm --force --recursive "$TMPDIR"
+mkdir --parents "$TMPDIR"
 
 resolved_config="${BOOTSTRAP_CONFIG//"@agoric"/"$SDK_ROOT_PATH/packages"}"
 
@@ -187,9 +188,11 @@ case "$ROLE" in
         curl "$MAINNET_ADDRBOOK_URL" --fail --location --output "/state/addrbook.json" --silent
         cp --force "/state/addrbook.json" "$AGORIC_HOME/config/addrbook.json"
 
+        update_pruning_config
         sed "$AGORIC_HOME/config/app.toml" \
             --expression 's|^snapshot-interval = .*|snapshot-interval = 0|' \
             --in-place
+
         touch "/state/$FOLLOWER_STATEFUL_SET_NAME-initialized"
     fi
 
