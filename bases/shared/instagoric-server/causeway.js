@@ -66,6 +66,7 @@ publicapp.get('/causeway/interactions', async (request, response) => {
             RETURN
               message.argSize     AS argSize,
               message.blockHeight AS blockHeight,
+              ''                  AS body,
               message.crankNum    AS crankNum,
               message.elapsed     AS elapsed,
               message.methargs    AS methargs,
@@ -88,9 +89,10 @@ publicapp.get('/causeway/interactions', async (request, response) => {
             RETURN
               0                   AS argSize,
               notify.blockHeight  AS blockHeight,
+              notify.body         AS body,
               0                   AS crankNum,
               notify.elapsed      AS elapsed,
-              0                   AS methargs,
+              ''                  AS methargs,
               notify.method       AS method,
               0                   AS promiseId,
               notify.runID        AS runId,
@@ -115,6 +117,7 @@ publicapp.get('/causeway/interactions', async (request, response) => {
       const interactions = result.records.map(record => ({
         argSize: record.get('argSize'),
         blockHeight: record.get('blockHeight'),
+        body: record.get('body'),
         crankNum: record.get('crankNum'),
         elapsed: record.get('elapsed'),
         methargs: record.get('methargs'),
