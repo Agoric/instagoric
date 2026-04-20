@@ -199,7 +199,7 @@ case "$ROLE" in
     /bin/bash "$CURRENT_DIRECTORY_PATH/cron.sh"
 
     export DEBUG="agoric,SwingSet:ls,SwingSet:vat"
-    start_chain "$APP_LOG_FILE"
+    start_chain "$APP_LOG_FILE" --iavl-disable-fastnode "true"
     ;;
 *)
     echo "unknown role"
