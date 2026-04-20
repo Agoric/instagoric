@@ -25,7 +25,7 @@ export LESS_THAN_EQUAL_TO_COMPARATOR='<='
 export MAINFORK_TIMESTAMP="1775044096"
 export MAINFORK_IMAGE_URL="https://storage.googleapis.com/agoric-snapshots-public/mainfork-snapshots"
 export MAINNET_ADDRBOOK_URL="https://snapshots.polkachu.com/addrbook/agoric/addrbook.json"
-export MAINNET_SNAPSHOT="agoric_19825658.tar.lz4"
+export MAINNET_SNAPSHOT="agoric_24963402.tar.lz4"
 export MAINNET_SNAPSHOT_URL="https://snapshots.polkachu.com/snapshots/agoric"
 export MAXIMUM_INBOUND_PEERS="150"
 export MAXIMUM_OUTBOUND_PEERS="150"
