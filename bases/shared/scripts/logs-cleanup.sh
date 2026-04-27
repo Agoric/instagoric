@@ -58,6 +58,8 @@ generate_access_token() {
 }
 
 main() {
+    wait_for_pod_readiness
+
     # shellcheck disable=SC2207,SC2010
     FILES=($(
         ls "$STATE_DIRECTORY_PATH" |
@@ -67,9 +69,11 @@ main() {
     for file in "${FILES[@]}"; do
         file_path="$STATE_DIRECTORY_PATH/$file"
         if ! should_exclude_file "$file_path" "${EXCLUDED_FILES[@]}"; then
-            upload_and_remove_file "$file" &
+            upload_and_remove_file "$file"
         fi
     done
+
+    echo "All stale log files cleaned up"
 }
 
 should_exclude_file() {
@@ -90,7 +94,7 @@ upload_and_remove_file() {
     FILE_PATH="$STATE_DIRECTORY_PATH/$file_name"
     OBJECT_NAME="$CLUSTER_NAME/$NAMESPACE/$PODNAME/$CHAIN_ID/$file_name"
 
-    FILE_SIZE=$(du --human-readable "$FILE_PATH" | cut --fields 1)
+    FILE_SIZE="$(du --human-readable "$FILE_PATH" | cut --fields 1)"
 
     echo "Uploading file '$OBJECT_NAME' of size $FILE_SIZE"
     HTTP_CODE=$(
@@ -106,6 +110,30 @@ upload_and_remove_file() {
     else
         echo "Deleting file '$FILE_PATH'"
         rm --force "$FILE_PATH"
+    fi
+}
+
+wait_for_pod_readiness() {
+    local NAMESPACE
+    local TOKEN
+
+    if test -f "$CA_PATH"; then
+        NAMESPACE="$(cat "$NAMESPACE_PATH")"
+        TOKEN="$(cat "$TOKEN_PATH")"
+
+        echo "Waiting for pod $PODNAME readiness"
+
+        until test "$(
+            curl "https://kubernetes.default.svc/api/v1/namespaces/$NAMESPACE/pods/$PODNAME" \
+                --cacert "$CA_PATH" \
+                --header "Accept: application/json" \
+                --header "Authorization: Bearer $TOKEN" \
+                --silent | \
+            jq --raw-output '.status.conditions[]? | select(.type=="Ready") | .status')" == "True"; do
+            sleep 10
+        done
+
+        echo "Proceeding with log uploads as pod $PODNAME is Ready"
     fi
 }
 

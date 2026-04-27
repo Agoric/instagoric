@@ -9,7 +9,7 @@ source "$CURRENT_DIRECTORY_PATH/source.sh"
 
 # shellcheck source=./logs-cleanup.sh
 /bin/bash "$CURRENT_DIRECTORY_PATH/logs-cleanup.sh" \
-    "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE"
+    "$APP_LOG_FILE" "$CONTEXTUAL_SLOGFILE" "$OTEL_LOG_FILE" "$SERVER_LOG_FILE" "$SLOGFILE" &
 
 # shellcheck source=./otel.sh
 /bin/bash "$CURRENT_DIRECTORY_PATH/otel.sh" >"$OTEL_LOG_FILE" 2>&1 &
