@@ -11,4 +11,5 @@ network_config="$(curl --fail --location --silent "$NETWORK_CONFIG_URL")"
 CHAIN_ID="$(echo "$network_config" | jq --raw-output '.chainName')" \
     CHAIN_NAME="${SCRIPT_NAME%.sh}" \
     CHAIN_RPC="$(echo "$network_config" | jq --raw-output '.rpcAddrs[0]')" \
+    GAS_ADJUSTMENT="2.0" \
     /bin/bash "$DIRECTORY_PATH/add-local-chain.sh"

@@ -3,23 +3,20 @@
 
 set -o errexit -o errtrace -o xtrace
 
-if test -z "$RELAYER_CONNECTIONS"; then
-    echo "No relayer connections configured"
-    sleep infinity
-fi
-
 ALL_CHAINS=("")
 CONFIG_FILE_PATH="$RELAYER_HOME/config/config.yaml"
 CONNECTIONS=("")
-DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 KEY_NAME=${KEY_NAME:-"My Wallet"}
 RELAYER_BINARY_EXPECTED_MD5_HASH="34496ca949e0e8fd7d9ab0514554b0a6"
 RELAYER_MNEMONIC=${RELAYER_MNEMONIC:-"orbit bench unit task food shock brand bracket domain regular warfare company announce wheel grape trust sphere boy doctor half guard ritual three ecology"}
 RELAYER_PATH="/bin/relayer"
+VOID="/dev/null"
+
+DIRECTORY_PATH="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> "$VOID" && pwd)"
 
 add_chains() {
     for chain in "${ALL_CHAINS[@]}"; do
-        if ! relayer chains show "$chain" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        if ! relayer chains show "$chain" --home "$RELAYER_HOME" > "$VOID" 2>&1; then
             if test -f "$DIRECTORY_PATH/$chain-pre.sh"; then
                 /bin/bash "$DIRECTORY_PATH/$chain-pre.sh"
             fi
@@ -44,7 +41,7 @@ add_chains() {
 
 add_keys() {
     for chain in "${ALL_CHAINS[@]}"; do
-        if ! relayer keys show "$chain" "$KEY_NAME" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        if ! relayer keys show "$chain" "$KEY_NAME" --home "$RELAYER_HOME" > "$VOID" 2>&1; then
             relayer keys restore "$chain" "$KEY_NAME" "$RELAYER_MNEMONIC" \
                 --home "$RELAYER_HOME"
         fi
@@ -63,7 +60,7 @@ add_paths() {
     local second_chain_id=""
 
     for path_name in "${CONNECTIONS[@]}"; do
-        if ! relayer paths show "$path_name" --home "$RELAYER_HOME" >/dev/null 2>&1; then
+        if ! relayer paths show "$path_name" --home "$RELAYER_HOME" > "$VOID" 2>&1; then
             mapping="$(
                 echo "$path_name" |
                     jq --compact-output --raw-input '{ first: (split("<->")[0]), second: (split("<->")[1]) }'
@@ -123,8 +120,8 @@ get_unique_chains() {
 }
 
 install_packages() {
-    apt-get update >/dev/null 2>&1
-    apt-get install curl jq --yes >/dev/null 2>&1
+    apt-get update > "$VOID" 2>&1
+    apt-get install curl jq --yes > "$VOID" 2>&1
 }
 
 initiate_configuration() {
@@ -136,13 +133,19 @@ initiate_configuration() {
 main() {
     install_packages
     fetch_binary
-    get_unique_chains
-    get_connections
-    initiate_configuration
-    add_chains
-    add_keys
-    add_paths
-    start_relayer
+
+    if test -z "$RELAYER_CONNECTIONS"; then
+        echo "No relayer connections configured"
+        sleep infinity
+    else
+        get_unique_chains
+        get_connections
+        initiate_configuration
+        add_chains
+        add_keys
+        add_paths
+        start_relayer
+    fi
 }
 
 start_relayer() {
