@@ -8,6 +8,7 @@ CHAIN_GAS_DENOM="${CHAIN_GAS_DENOM:-"ubld"}"
 COIN_TYPE="${COIN_TYPE:-"564"}"
 CONFIG_FILE_PATH="$RELAYER_HOME/$CHAIN_NAME.json"
 GAS_ADJUSTMENT="${GAS_ADJUSTMENT:-"1.2"}"
+MINIMUM_GAS_AMOUNT="${MINIMUM_GAS_AMOUNT:-"0"}"
 SKELETON_OBJECT=""
 
 add_chain() {
@@ -28,6 +29,7 @@ create_skeleton() {
                     "gas-prices": "",
                     "key": "default",
                     "keyring-backend": "test",
+                    "min-gas-amount": "",
                     "output-format": "json",
                     "rpc-addr": "",
                     "sign-mode": "direct",
@@ -52,12 +54,14 @@ write_config_file() {
             --arg coin_type "$COIN_TYPE" \
             --arg gas_adjustment "$GAS_ADJUSTMENT" \
             --arg gas_prices "$CHAIN_GAS_AMOUNT$CHAIN_GAS_DENOM" \
+            --arg minimum_gas_amount "$MINIMUM_GAS_AMOUNT" \
             --arg rpc "$CHAIN_RPC" '
       .value["account-prefix"] = $prefix |
       .value["chain-id"] = $chain_id |
       .value["coin-type"] = ($coin_type | tonumber) |
       .value["gas-adjustment"] = ($gas_adjustment | tonumber) |
       .value["gas-prices"] = $gas_prices |
+      .value["min-gas-amount"] = ($minimum_gas_amount | tonumber) |
       .value["rpc-addr"] = $rpc
     ' >"$CONFIG_FILE_PATH"
 }
