@@ -29,7 +29,7 @@ spec:
                   key: NETDOMAIN
                   optional: true
                   name: instagoric-release
-          image: "node:20-bullseye"
+          image: "node:22-bookworm"
           name: explorer
           ports:
             - containerPort: 8080
