@@ -41,7 +41,7 @@ spec:
                   optional: true
             - name: RELAYER_HOME
               value: /relayer
-          image: debian:bullseye
+          image: debian:bookworm
           name: relayer
           resources:
             limits:
