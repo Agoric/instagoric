@@ -1,0 +1,16 @@
+{
+  "type": "cosmos",
+  "value": {
+    "account-prefix": "$EXTERNAL_CHAIN_ADDRESS_PREFIX",
+    "chain-id": "$EXTERNAL_CHAIN_ID",
+    "debug": true,
+    "gas-adjustment": 1.5,
+    "gas-prices": "0.25$EXTERNAL_CHAIN_GAS_DENOM",
+    "key": "default",
+    "keyring-backend": "test",
+    "output-format": "json",
+    "rpc-addr": "$EXTERNAL_CHAIN_RPC",
+    "sign-mode": "direct",
+    "timeout": "20s"
+  }
+}
