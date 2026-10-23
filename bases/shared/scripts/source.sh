@@ -13,6 +13,7 @@ export CHAIN_ID="${CHAIN_ID:-"instagoric-1"}"
 export CONTAINER_NAME="node"
 export CORE_DUMP_CONFIG_FILE_PATH="/proc/sys/kernel/core_pattern"
 export CORE_DUMP_FILES_DIRECTORY="/state/cores"
+export DISABLE_SNAPSHOTS=${DISABLE_SNAPSHOTS:-"false"}
 export EQUAL_TO_COMPARATOR='=='
 export FIRST_FORK_NODE_ID="0663e8221928c923d516ea1e8972927f54da9edb"
 export FIRST_FORK_STATEFUL_SET_NAME="fork1"

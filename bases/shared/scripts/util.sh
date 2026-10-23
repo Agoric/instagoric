@@ -615,6 +615,19 @@ update_config_files() {
 }
 
 update_pruning_config() {
+    if test "$DISABLE_SNAPSHOTS" == "true"; then
+        sed "$AGORIC_HOME/config/app.toml" \
+            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 0|}' \
+            --in-place
+    else
+        if test -z "$PRUNING"; then
+            sed "$AGORIC_HOME/config/app.toml" \
+                --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 1000|}' \
+                --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent =.*|snapshot-keep-recent = 10|}' \
+                --in-place
+        fi
+    fi
+
     if test -n "$PRUNING"; then
         sed --in-place "s|^pruning =.*|pruning = \"$PRUNING\"|" "$AGORIC_HOME/config/app.toml"
 
@@ -625,8 +638,6 @@ update_pruning_config() {
         sed "$AGORIC_HOME/config/app.toml" \
             --expression 's|^pruning-interval =.*|pruning-interval = 1000|' \
             --expression 's|^pruning-keep-recent =.*|pruning-keep-recent = 10000|' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-interval =.*|snapshot-interval = 1000|}' \
-            --expression '/^\[state-sync]/,/^\[/{s|^snapshot-keep-recent =.*|snapshot-keep-recent = 10|}' \
             --in-place
     fi
 }
