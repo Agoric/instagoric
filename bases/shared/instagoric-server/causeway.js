@@ -47,11 +47,10 @@ publicapp.get('/causeway/interactions', async (request, response) => {
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
           !!runIds.length &&
             `${sourceNodeName}.runID = ${targetNodeName}.runID`,
-          !!runIds.length &&
-            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
+          !!runIds.length && `${sourceNodeName}.runID IN $runIds`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
-          !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
-          !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
+          !!vatIds.length && 'source.vatID IN $vatIds',
+          !!vatIds.length && 'target.vatID IN $vatIds',
         ]
           .filter(Boolean)
           .join(' AND ');
@@ -111,7 +110,9 @@ publicapp.get('/causeway/interactions', async (request, response) => {
       const result = await session.run(query, {
         blockHeight: Number(blockHeight),
         endTime: endTimestamp,
+        runIds,
         startTime: startTimestamp,
+        vatIds,
       });
 
       const interactions = result.records.map(record => ({
@@ -171,11 +172,10 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
           endTimestamp && `${sourceNodeName}.time <= $endTime`,
           !!runIds.length &&
             `${sourceNodeName}.runID = ${targetNodeName}.runID`,
-          !!runIds.length &&
-            `${sourceNodeName}.runID IN ["${runIds.join('", "')}"]`,
+          !!runIds.length && `${sourceNodeName}.runID IN $runIds`,
           startTimestamp && `${sourceNodeName}.time >= $startTime`,
-          !!vatIds.length && `source.vatID IN ["${vatIds.join('", "')}"]`,
-          !!vatIds.length && `target.vatID IN ["${vatIds.join('", "')}"]`,
+          !!vatIds.length && 'source.vatID IN $vatIds',
+          !!vatIds.length && 'target.vatID IN $vatIds',
         ]
           .filter(Boolean)
           .join(' AND ');
@@ -205,7 +205,9 @@ publicapp.get('/causeway/interactions/count', async (request, response) => {
           await session.run(countQuery, {
             blockHeight: Number(blockHeight),
             endTime: endTimestamp,
+            runIds,
             startTime: startTimestamp,
+            vatIds,
           })
         );
 
@@ -475,8 +477,7 @@ publicapp.get(
           .filter(triggerSource => Boolean(triggerSource.trim()));
 
         const filters = [
-          !!triggerSources.length &&
-            `run.triggerSource IN ["${triggerSources.join('", "')}"]`,
+          !!triggerSources.length && 'run.triggerSource IN $triggerSources',
           'run.triggerTxHash = $transactionId',
           'run.triggerType = "bridge"',
         ]
@@ -493,6 +494,7 @@ publicapp.get(
             `,
               {
                 transactionId,
+                triggerSources,
               },
             )
           );
@@ -543,7 +545,7 @@ publicapp.get('/causeway/vats', async (request, response) => {
       const filters = [
         blockHeight && 'event.blockHeight = $blockHeight',
         endTimestamp && 'event.time <= $endTime',
-        !!runIds.length && `event.runID IN ["${runIds.join('", "')}"]`,
+        !!runIds.length && 'event.runID IN $runIds',
         startTimestamp && 'event.time >= $startTime',
       ]
         .filter(Boolean)
@@ -559,7 +561,7 @@ publicapp.get('/causeway/vats', async (request, response) => {
               WITH collect(target) AS vatNodes
               UNWIND vatNodes AS v
               WITH DISTINCT v
-              WHERE v IS NOT NULL ${vatIds.length ? `AND v.vatID IN ["${vatIds.join('", "')}"]` : ''}
+              WHERE v IS NOT NULL ${vatIds.length ? 'AND v.vatID IN $vatIds' : ''}
               RETURN
                 v.vatID   AS vatID,
                 v.name    AS vatName
@@ -568,7 +570,9 @@ publicapp.get('/causeway/vats', async (request, response) => {
             {
               blockHeight: Number(blockHeight),
               endTime: endTimestamp,
+              runIds,
               startTime: startTimestamp,
+              vatIds,
             },
           )
         );
