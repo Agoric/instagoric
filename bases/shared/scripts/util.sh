@@ -249,6 +249,10 @@ get_pod_ip() {
     local pod_info
     local pod_ip
 
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
+
     while true; do
         pod_info=$(
             curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods" \
@@ -696,6 +700,10 @@ wait_for_pod() {
     local app_label_value="$1"
     local pod_info
     local pod_phase
+
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
 
     while true; do
         pod_info=$(
