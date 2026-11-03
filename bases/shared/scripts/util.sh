@@ -159,9 +159,13 @@ ensure_balance() {
 
 export_neo4j_env() {
     if test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
-        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
         export NEO4J_URI="neo4j://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_BOLT"
         export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
+
+        # Keep the password out of xtrace; `local -` restores it on return
+        local -
+        set +x
+        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
     fi
 }
 
