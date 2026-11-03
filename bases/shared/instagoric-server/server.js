@@ -35,6 +35,9 @@ import {
 import './causeway.js';
 import './faucet.js';
 
+// zx logs fetch init (headers and body), which would leak bearer and access tokens
+$.logIgnore = ['fetch'];
+
 const { details: X } = assert;
 
 let CLUSTER_NAME;
