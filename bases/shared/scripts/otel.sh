@@ -1,6 +1,6 @@
 #! /bin/bash
 
-set -o nounset -o xtrace
+set -o nounset
 
 ARCHITECTURE="$(dpkg --print-architecture)"
 CONTAINER_ID=""
@@ -10,6 +10,9 @@ OTEL_RELEASE_SOURCE="https://github.com/open-telemetry/opentelemetry-collector-r
 
 # shellcheck source=./source.sh
 source "$CURRENT_DIRECTORY_PATH/source.sh"
+
+# Enabled after sourcing, which reads the bearer token
+set -o xtrace
 
 install_otel() {
     local zip_path="/tmp/otel.tgz"
@@ -51,6 +54,8 @@ substitue_values_in_config() {
 wait_for_container_id() {
     while true; do
         CONTAINER_ID="$(
+            # Keep the bearer token out of xtrace (only within this subshell)
+            set +x
             curl "$API_ENDPOINT/api/v1/namespaces/$NAMESPACE/pods?labelSelector=statefulset.kubernetes.io/pod-name%3D$PODNAME" \
                 --cacert "$CA_PATH" --header "Authorization: Bearer $(cat "$TOKEN_PATH")" --silent |
                 jq --arg container_name "$CONTAINER_NAME" --raw-output '.items[] | .status.containerStatuses[] | select(.name == $container_name) | .containerID' |

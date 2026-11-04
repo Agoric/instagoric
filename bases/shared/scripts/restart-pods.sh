@@ -1,12 +1,16 @@
 #! /bin/bash
 
-set -o errexit -o nounset -o xtrace
+set -o errexit -o nounset
+
+# Read before enabling xtrace so the token isn't traced
+TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
+
+set -o xtrace
 
 CERTIFICATE_FILE="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 CURRENT_STATEFUL_SET="$ROLE"
 INTERVAL="$((60 * 60))"
 NAMESPACE="$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace)"
-TOKEN="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)"
 OUTPUT_FILE="/tmp/$(date '+%s').json"
 VOID="/dev/null"
 
@@ -15,6 +19,10 @@ clean_up() {
 }
 
 get_all_stateful_sets() {
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
+
     curl "https://kubernetes.default.svc/apis/apps/v1/namespaces/$NAMESPACE/statefulsets" \
      --cacert "$CERTIFICATE_FILE" \
      --header "Accept: application/json" \
@@ -54,6 +62,10 @@ trigger_rollout_restart() {
     TIMESTAMP="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
 
     PATCH_JSON="{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"kubectl.kubernetes.io/restartedAt\":\"$TIMESTAMP\"}}}}}"
+
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
 
     curl "https://kubernetes.default.svc/apis/apps/v1/namespaces/$NAMESPACE/statefulsets/$STATEFUL_SET_NAME" \
      --cacert "$CERTIFICATE_FILE" \

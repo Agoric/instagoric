@@ -159,9 +159,13 @@ ensure_balance() {
 
 export_neo4j_env() {
     if test -d "$NEO4J_CONFIG_MOUNT_PATH"; then
-        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
         export NEO4J_URI="neo4j://$NEO4J_GATEWAY_SERVICE_HOST:$NEO4J_GATEWAY_SERVICE_PORT_BOLT"
         export NEO4J_USER="$(cat "$NEO4J_CONFIG_MOUNT_PATH/USERNAME")"
+
+        # Keep the password out of xtrace; `local -` restores it on return
+        local -
+        set +x
+        export NEO4J_PASSWORD="$(cat "$NEO4J_CONFIG_MOUNT_PATH/PASSWORD")"
     fi
 }
 
@@ -248,6 +252,10 @@ get_pod_ip() {
     local app_label_value="$1"
     local pod_info
     local pod_ip
+
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
 
     while true; do
         pod_info=$(
@@ -696,6 +704,10 @@ wait_for_pod() {
     local app_label_value="$1"
     local pod_info
     local pod_phase
+
+    # Keep the bearer token out of xtrace; `local -` restores it on return
+    local -
+    set +x
 
     while true; do
         pod_info=$(
